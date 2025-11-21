@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giao Đồ Ăn Bằng Drone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="nav-brand">
+                    <h1>🚁 Drone Delivery</h1>
+                </div>
+                <div class="nav-menu" id="navMenu">
+                    <a href="#" onclick="showPage('home')">Trang chủ</a>
+                    <a href="#" onclick="showPage('restaurants')">Nhà hàng</a>
+                    <a href="#" onclick="showPage('orders')">Đơn hàng</a>
+                    <a href="#" onclick="showPage('drones')">Drone</a>
+                </div>
+                <div class="nav-auth" id="navAuth">
+                    <button onclick="showPage('login')" class="btn btn-outline">Đăng nhập</button>
+                    <button onclick="showPage('register')" class="btn btn-primary">Đăng ký</button>
+                </div>
+                <div class="nav-user" id="navUser" style="display: none;">
+                    <span id="userName"></span>
+                    <button onclick="logout()" class="btn btn-outline">Đăng xuất</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Home Page -->
+        <div id="homePage" class="page active">
+            <div class="hero">
+                <h2>Giao Đồ Ăn Nhanh Chóng Bằng Drone</h2>
+                <p>Công nghệ hiện đại, giao hàng siêu tốc trong 30 phút</p>
+                <button onclick="showPage('restaurants')" class="btn btn-primary btn-large">Đặt hàng ngay</button>
+            </div>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <div class="icon">⚡</div>
+                    <h3>Giao hàng nhanh</h3>
+                    <p>Giao trong vòng 30 phút</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔒</div>
+                    <h3>An toàn</h3>
+                    <p>Công nghệ drone tiên tiến</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">💳</div>
+                    <h3>Thanh toán dễ dàng</h3>
+                    <p>Nhiều phương thức thanh toán</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Page -->
+        <div id="loginPage" class="page">
+            <div class="auth-container">
+                <h2>Đăng nhập</h2>
+                <form id="loginForm" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Tên đăng nhập</label>
+                        <input type="text" id="loginUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Mật khẩu</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Đăng nhập</button>
+                </form>
+                <p class="auth-link">Chưa có tài khoản? <a href="#" onclick="showPage('register')">Đăng ký ngay</a></p>
+            </div>
+        </div>
+
+        <!-- Register Page -->
+        <div id="registerPage" class="page">
+            <div class="auth-container">
+                <h2>Đăng ký tài khoản</h2>
+                <form id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Loại tài khoản</label>
+                        <select id="registerRole" onchange="toggleRestaurantFields()">
+                            <option value="customer">Khách hàng</option>
+                            <option value="restaurant">Nhà hàng</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tên đăng nhập</label>
+                        <input type="text" id="registerUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Mật khẩu</label>
+                        <input type="password" id="registerPassword" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Họ tên</label>
+                        <input type="text" id="registerFullName">
+                    </div>
+                    <div class="form-group">
+                        <label>Số điện thoại</label>
+                        <input type="tel" id="registerPhone">
+                    </div>
+                    <div class="form-group">
+                        <label>Địa chỉ</label>
+                        <textarea id="registerAddress" rows="2"></textarea>
+                    </div>
+                    
+                    <div id="restaurantFields" style="display: none;">
+                        <div class="form-group">
+                            <label>Tên nhà hàng</label>
+                            <input type="text" id="registerRestaurantName">
+                        </div>
+                        <div class="form-group">
+                            <label>Mô tả nhà hàng</label>
+                            <textarea id="registerRestaurantDesc" rows="3"></textarea>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block">Đăng ký</button>
+                </form>
+                <p class="auth-link">Đã có tài khoản? <a href="#" onclick="showPage('login')">Đăng nhập</a></p>
+            </div>
+        </div>
+
+        <!-- Restaurants Page -->
+        <div id="restaurantsPage" class="page">
+            <h2>Danh sách nhà hàng</h2>
+            <div id="restaurantsList" class="grid"></div>
+        </div>
+
+        <!-- Restaurant Products Page -->
+        <div id="productsPage" class="page">
+            <button onclick="showPage('restaurants')" class="btn btn-outline mb-3">← Quay lại</button>
+            <h2 id="restaurantName"></h2>
+            <div id="productsList" class="grid"></div>
+            
+            <div id="cart" style="display: none;">
+                <h3>Giỏ hàng</h3>
+                <div id="cartItems"></div>
+                <div class="cart-total">
+                    <strong>Tổng cộng:</strong> <span id="cartTotal">0</span> VNĐ
+                </div>
+                <button onclick="showCheckout()" class="btn btn-primary btn-block">Thanh toán</button>
+            </div>
+        </div>
+
+        <!-- Checkout Page -->
+        <div id="checkoutPage" class="page">
+            <h2>Xác nhận đơn hàng</h2>
+            <div class="checkout-container">
+                <div class="checkout-items">
+                    <h3>Chi tiết đơn hàng</h3>
+                    <div id="checkoutItems"></div>
+                    <div class="checkout-total">
+                        <strong>Tổng cộng:</strong> <span id="checkoutTotal">0</span> VNĐ
+                    </div>
+                </div>
+                
+                <form id="checkoutForm" onsubmit="handleCheckout(event)">
+                    <h3>Thông tin giao hàng</h3>
+                    <div class="form-group">
+                        <label>Địa chỉ giao hàng</label>
+                        <textarea id="deliveryAddress" required rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ghi chú</label>
+                        <textarea id="orderNotes" rows="2"></textarea>
+                    </div>
+                    
+                    <h3>Phương thức thanh toán</h3>
+                    <div class="form-group">
+                        <select id="paymentMethod" required>
+                            <option value="credit_card">Thẻ tín dụng</option>
+                            <option value="debit_card">Thẻ ghi nợ</option>
+                            <option value="e_wallet">Ví điện tử</option>
+                            <option value="cash">Tiền mặt</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block">Đặt hàng</button>
+                    <button type="button" onclick="showPage('products')" class="btn btn-outline btn-block">Hủy</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Orders Page -->
+        <div id="ordersPage" class="page">
+            <h2>Đơn hàng của tôi</h2>
+            <div id="ordersList"></div>
+        </div>
+
+        <!-- Drones Page -->
+        <div id="dronesPage" class="page">
+            <h2>Danh sách Drone</h2>
+            <div id="dronesList" class="grid"></div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Drone Delivery System. Dự án Công nghệ Phần mềm.</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

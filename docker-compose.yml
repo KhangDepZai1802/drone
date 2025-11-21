@@ -1,0 +1,196 @@
+version: '3.8'
+
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: drone_delivery_db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - drone_network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # User Service
+  user_service:
+    build:
+      context: ./user_service
+      dockerfile: Dockerfile
+    container_name: user_service
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
+      - JWT_ALGORITHM=HS256
+      - SERVICE_NAME=user_service
+    ports:
+      - "8001:8000"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - drone_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Product Service
+  product_service:
+    build:
+      context: ./product_service
+      dockerfile: Dockerfile
+    container_name: product_service
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
+      - JWT_ALGORITHM=HS256
+      - SERVICE_NAME=product_service
+      - USER_SERVICE_URL=http://user_service:8000
+    ports:
+      - "8002:8000"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      user_service:
+        condition: service_healthy
+    networks:
+      - drone_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Order Service
+  order_service:
+    build:
+      context: ./order_service
+      dockerfile: Dockerfile
+    container_name: order_service
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
+      - JWT_ALGORITHM=HS256
+      - SERVICE_NAME=order_service
+      - USER_SERVICE_URL=http://user_service:8000
+      - PRODUCT_SERVICE_URL=http://product_service:8000
+      - PAYMENT_SERVICE_URL=http://payment_service:8000
+    ports:
+      - "8003:8000"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      user_service:
+        condition: service_healthy
+      product_service:
+        condition: service_healthy
+    networks:
+      - drone_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Payment Service
+  payment_service:
+    build:
+      context: ./payment_service
+      dockerfile: Dockerfile
+    container_name: payment_service
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
+      - JWT_ALGORITHM=HS256
+      - SERVICE_NAME=payment_service
+      - USER_SERVICE_URL=http://user_service:8000
+      - ORDER_SERVICE_URL=http://order_service:8000
+    ports:
+      - "8004:8000"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      user_service:
+        condition: service_healthy
+    networks:
+      - drone_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - user_service
+      - product_service
+      - order_service
+      - payment_service
+    networks:
+      - drone_network
+    restart: unless-stopped
+
+  # Nginx API Gateway (Optional - cho production)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: nginx_gateway
+    ports:
+      - "80:80"
+    depends_on:
+      - user_service
+      - product_service
+      - order_service
+      - payment_service
+      - frontend
+    networks:
+      - drone_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  drone_network:
+    driver: bridge
+
+volumes:
+  sqlserver_data:
