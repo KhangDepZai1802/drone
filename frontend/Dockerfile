@@ -1,14 +1,12 @@
-# Sử dụng Nginx bản siêu nhẹ (Alpine)
 FROM nginx:alpine
 
-# 1. Xóa các file mặc định của Nginx để sạch sẽ
+# Xóa file mặc định
 RUN rm -rf /usr/share/nginx/html/*
 
-# 2. Copy file index.html duy nhất của bạn vào thư mục gốc
+# Copy 3 file vào container
 COPY index.html /usr/share/nginx/html/index.html
+COPY style.css /usr/share/nginx/html/style.css
+COPY app.js /usr/share/nginx/html/app.js
 
-# 3. Mở cổng 80 (Cổng web mặc định)
 EXPOSE 80
-
-# 4. Chạy Nginx
 CMD ["nginx", "-g", "daemon off;"]
