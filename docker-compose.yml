@@ -7,7 +7,7 @@ services:
     container_name: drone_delivery_db
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Passw0rd
+      - SA_PASSWORD=Khangle18
       - MSSQL_PID=Developer
     ports:
       - "1433:1433"
@@ -16,7 +16,7 @@ services:
     networks:
       - drone_network
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1"
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -Q "SELECT 1" -C
       interval: 10s
       timeout: 5s
       retries: 10
@@ -31,7 +31,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
       - JWT_ALGORITHM=HS256
       - SERVICE_NAME=user_service
@@ -59,7 +59,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
       - JWT_ALGORITHM=HS256
       - SERVICE_NAME=product_service
@@ -90,7 +90,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
       - JWT_ALGORITHM=HS256
       - SERVICE_NAME=order_service
@@ -125,7 +125,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:YourStrong@Passw0rd@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-12345678
       - JWT_ALGORITHM=HS256
       - SERVICE_NAME=payment_service
