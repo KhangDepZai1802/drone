@@ -3,68 +3,544 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giao Đồ Ăn Bằng Drone</title>
-    <link rel="stylesheet" href="style.css">
+    <title>🚁 Drone Food Delivery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #FF6B6B;
+            --secondary: #4ECDC4;
+            --accent: #FFE66D;
+            --dark: #2C3E50;
+            --light: #F8F9FA;
+            --success: #51CF66;
+            --warning: #FFD93D;
+            --danger: #FF6B6B;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* Loading Spinner */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Header */
+        header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--dark);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-user {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Banner Slider */
+        .banner-slider {
+            position: relative;
+            height: 400px;
+            overflow: hidden;
+            margin-bottom: 3rem;
+        }
+
+        .banner-slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            animation: fadeIn 1s;
+        }
+
+        .banner-slide.active {
+            display: flex;
+        }
+
+        .banner-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+            color: white;
+            text-align: center;
+        }
+
+        .banner-content h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .banner-content p {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .page {
+            display: none;
+            animation: slideIn 0.3s;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Cards Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-image::before {
+            content: '🍜';
+            position: absolute;
+            font-size: 5rem;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.3;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-text {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .card-price {
+            font-size: 1.5rem;
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #ff8787);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-outline {
+            border: 2px solid var(--primary);
+            background: transparent;
+            color: var(--primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-block {
+            width: 100%;
+            display: block;
+        }
+
+        /* Form Styles */
+        .form-container {
+            max-width: 500px;
+            margin: 2rem auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Admin Dashboard */
+        .dashboard {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: var(--light);
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        tr:hover {
+            background: var(--light);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Cart */
+        .cart-sidebar {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+            transition: right 0.3s;
+            z-index: 1500;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .cart-sidebar.active {
+            right: 0;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .cart-total {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--dark);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* Alert */
+        .alert {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 3000;
+            animation: slideInRight 0.3s;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+            }
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .alert-success {
+            border-left: 5px solid var(--success);
+        }
+
+        .alert-error {
+            border-left: 5px solid var(--danger);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .banner-content h1 {
+                font-size: 2rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cart-sidebar {
+                width: 100%;
+                right: -100%;
+            }
+        }
+    </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+
     <!-- Header -->
     <header>
         <nav class="navbar">
-            <div class="container">
-                <div class="nav-brand">
-                    <h1>🚁 Drone Delivery</h1>
-                </div>
-                <div class="nav-menu" id="navMenu">
-                    <a href="#" onclick="showPage('home')">Trang chủ</a>
-                    <a href="#" onclick="showPage('restaurants')">Nhà hàng</a>
-                    <a href="#" onclick="showPage('orders')">Đơn hàng</a>
-                    <a href="#" onclick="showPage('drones')">Drone</a>
-                </div>
-                <div class="nav-auth" id="navAuth">
-                    <button onclick="showPage('login')" class="btn btn-outline">Đăng nhập</button>
-                    <button onclick="showPage('register')" class="btn btn-primary">Đăng ký</button>
-                </div>
-                <div class="nav-user" id="navUser" style="display: none;">
-                    <span id="userName"></span>
-                    <button onclick="logout()" class="btn btn-outline">Đăng xuất</button>
-                </div>
+            <div class="logo" onclick="navigateTo('home')">
+                🚁 Drone Food Delivery
+            </div>
+            <div class="nav-links" id="navLinks">
+                <a onclick="navigateTo('home')">Trang chủ</a>
+                <a onclick="navigateTo('restaurants')">Nhà hàng</a>
+                <a onclick="navigateTo('orders')">Đơn hàng</a>
+                <a onclick="toggleCart()" id="cartBtn" style="display: none;">
+                    🛒 Giỏ hàng (<span id="cartCount">0</span>)
+                </a>
+            </div>
+            <div class="nav-user" id="navUser">
+                <!-- Will be populated by JS -->
             </div>
         </nav>
     </header>
 
-    <!-- Main Content -->
-    <main class="container">
+    <!-- Main Container -->
+    <div class="container">
         <!-- Home Page -->
         <div id="homePage" class="page active">
-            <div class="hero">
-                <h2>Giao Đồ Ăn Nhanh Chóng Bằng Drone</h2>
-                <p>Công nghệ hiện đại, giao hàng siêu tốc trong 30 phút</p>
-                <button onclick="showPage('restaurants')" class="btn btn-primary btn-large">Đặt hàng ngay</button>
-            </div>
-            
-            <div class="features">
-                <div class="feature-card">
-                    <div class="icon">⚡</div>
-                    <h3>Giao hàng nhanh</h3>
-                    <p>Giao trong vòng 30 phút</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">🔒</div>
-                    <h3>An toàn</h3>
-                    <p>Công nghệ drone tiên tiến</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">💳</div>
-                    <h3>Thanh toán dễ dàng</h3>
-                    <p>Nhiều phương thức thanh toán</p>
+            <!-- Banner Slider -->
+            <div class="banner-slider">
+                <div class="banner-slide active" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="banner-content">
+                        <h1>🚁 Giao hàng bằng Drone</h1>
+                        <p>Nhanh chóng - An toàn - Hiện đại</p>
+                        <button class="btn btn-primary" onclick="navigateTo('restaurants')">Đặt hàng ngay</button>
+                    </div>
                 </div>
             </div>
+
+            <h2 style="color: white; text-align: center; margin-bottom: 2rem;">🔥 Món ăn phổ biến</h2>
+            <div class="grid" id="popularDishes"></div>
         </div>
 
         <!-- Login Page -->
         <div id="loginPage" class="page">
-            <div class="auth-container">
-                <h2>Đăng nhập</h2>
+            <div class="form-container">
+                <h2 style="text-align: center; margin-bottom: 2rem;">Đăng nhập</h2>
                 <form id="loginForm" onsubmit="handleLogin(event)">
                     <div class="form-group">
                         <label>Tên đăng nhập</label>
@@ -76,144 +552,1115 @@
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">Đăng nhập</button>
                 </form>
-                <p class="auth-link">Chưa có tài khoản? <a href="#" onclick="showPage('register')">Đăng ký ngay</a></p>
+                <p style="text-align: center; margin-top: 1rem;">
+                    Chưa có tài khoản? <a href="#" onclick="navigateTo('register')" style="color: var(--primary);">Đăng ký ngay</a>
+                </p>
             </div>
         </div>
 
         <!-- Register Page -->
         <div id="registerPage" class="page">
-            <div class="auth-container">
-                <h2>Đăng ký tài khoản</h2>
+            <div class="form-container">
+                <h2 style="text-align: center; margin-bottom: 2rem;">Đăng ký tài khoản</h2>
                 <form id="registerForm" onsubmit="handleRegister(event)">
                     <div class="form-group">
-                        <label>Loại tài khoản</label>
-                        <select id="registerRole" onchange="toggleRestaurantFields()">
-                            <option value="customer">Khách hàng</option>
-                            <option value="restaurant">Nhà hàng</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label>Email</label>
-                        <input type="email" id="registerEmail" required>
+                        <input type="email" id="regEmail" required>
                     </div>
                     <div class="form-group">
                         <label>Tên đăng nhập</label>
-                        <input type="text" id="registerUsername" required>
+                        <input type="text" id="regUsername" required>
                     </div>
                     <div class="form-group">
                         <label>Mật khẩu</label>
-                        <input type="password" id="registerPassword" required minlength="6">
+                        <input type="password" id="regPassword" required minlength="6">
                     </div>
                     <div class="form-group">
                         <label>Họ tên</label>
-                        <input type="text" id="registerFullName">
+                        <input type="text" id="regFullName">
                     </div>
                     <div class="form-group">
                         <label>Số điện thoại</label>
-                        <input type="tel" id="registerPhone">
+                        <input type="tel" id="regPhone">
                     </div>
                     <div class="form-group">
                         <label>Địa chỉ</label>
-                        <textarea id="registerAddress" rows="2"></textarea>
+                        <textarea id="regAddress" rows="2"></textarea>
                     </div>
-                    
-                    <div id="restaurantFields" style="display: none;">
-                        <div class="form-group">
-                            <label>Tên nhà hàng</label>
-                            <input type="text" id="registerRestaurantName">
-                        </div>
-                        <div class="form-group">
-                            <label>Mô tả nhà hàng</label>
-                            <textarea id="registerRestaurantDesc" rows="3"></textarea>
-                        </div>
-                    </div>
-                    
                     <button type="submit" class="btn btn-primary btn-block">Đăng ký</button>
                 </form>
-                <p class="auth-link">Đã có tài khoản? <a href="#" onclick="showPage('login')">Đăng nhập</a></p>
+                <p style="text-align: center; margin-top: 1rem;">
+                    Đã có tài khoản? <a href="#" onclick="navigateTo('login')" style="color: var(--primary);">Đăng nhập</a>
+                </p>
             </div>
         </div>
 
         <!-- Restaurants Page -->
         <div id="restaurantsPage" class="page">
-            <h2>Danh sách nhà hàng</h2>
-            <div id="restaurantsList" class="grid"></div>
+            <h2 style="color: white; margin-bottom: 2rem;">🍽️ Danh sách nhà hàng</h2>
+            <div class="grid" id="restaurantsList"></div>
         </div>
 
-        <!-- Restaurant Products Page -->
-        <div id="productsPage" class="page">
-            <button onclick="showPage('restaurants')" class="btn btn-outline mb-3">← Quay lại</button>
-            <h2 id="restaurantName"></h2>
-            <div id="productsList" class="grid"></div>
-            
-            <div id="cart" style="display: none;">
-                <h3>Giỏ hàng</h3>
-                <div id="cartItems"></div>
-                <div class="cart-total">
-                    <strong>Tổng cộng:</strong> <span id="cartTotal">0</span> VNĐ
-                </div>
-                <button onclick="showCheckout()" class="btn btn-primary btn-block">Thanh toán</button>
-            </div>
-        </div>
-
-        <!-- Checkout Page -->
-        <div id="checkoutPage" class="page">
-            <h2>Xác nhận đơn hàng</h2>
-            <div class="checkout-container">
-                <div class="checkout-items">
-                    <h3>Chi tiết đơn hàng</h3>
-                    <div id="checkoutItems"></div>
-                    <div class="checkout-total">
-                        <strong>Tổng cộng:</strong> <span id="checkoutTotal">0</span> VNĐ
-                    </div>
-                </div>
-                
-                <form id="checkoutForm" onsubmit="handleCheckout(event)">
-                    <h3>Thông tin giao hàng</h3>
-                    <div class="form-group">
-                        <label>Địa chỉ giao hàng</label>
-                        <textarea id="deliveryAddress" required rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Ghi chú</label>
-                        <textarea id="orderNotes" rows="2"></textarea>
-                    </div>
-                    
-                    <h3>Phương thức thanh toán</h3>
-                    <div class="form-group">
-                        <select id="paymentMethod" required>
-                            <option value="credit_card">Thẻ tín dụng</option>
-                            <option value="debit_card">Thẻ ghi nợ</option>
-                            <option value="e_wallet">Ví điện tử</option>
-                            <option value="cash">Tiền mặt</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary btn-block">Đặt hàng</button>
-                    <button type="button" onclick="showPage('products')" class="btn btn-outline btn-block">Hủy</button>
-                </form>
-            </div>
+        <!-- Restaurant Menu Page -->
+        <div id="menuPage" class="page">
+            <button class="btn btn-outline" onclick="navigateTo('restaurants')" style="margin-bottom: 1rem;">← Quay lại</button>
+            <h2 style="color: white; margin-bottom: 2rem;" id="restaurantTitle"></h2>
+            <div class="grid" id="menuList"></div>
         </div>
 
         <!-- Orders Page -->
         <div id="ordersPage" class="page">
-            <h2>Đơn hàng của tôi</h2>
+            <h2 style="color: white; margin-bottom: 2rem;">📦 Đơn hàng của tôi</h2>
             <div id="ordersList"></div>
         </div>
 
-        <!-- Drones Page -->
-        <div id="dronesPage" class="page">
-            <h2>Danh sách Drone</h2>
-            <div id="dronesList" class="grid"></div>
-        </div>
-    </main>
+        <!-- Admin Dashboard -->
+        <div id="adminPage" class="page">
+            <h2 style="color: white; margin-bottom: 2rem;">⚙️ Quản trị hệ thống</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="totalUsers">0</h3>
+                    <p>Người dùng</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalRestaurants">0</h3>
+                    <p>Nhà hàng</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalOrders">0</h3>
+                    <p>Đơn hàng</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalDrones">0</h3>
+                    <p>Drone</p>
+                </div>
+            </div>
 
-    <footer>
-        <div class="container">
-            <p>&copy; 2025 Drone Delivery System. Dự án Công nghệ Phần mềm.</p>
-        </div>
-    </footer>
+            <div class="dashboard">
+                <h3>Quản lý nhà hàng</h3>
+                <button class="btn btn-primary" onclick="showAddRestaurantModal()">+ Thêm nhà hàng</button>
+                <div class="table-container" style="margin-top: 1rem;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Tên nhà hàng</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminRestaurantsList"></tbody>
+                    </table>
+                </div>
+            </div>
 
-    <script src="app.js"></script>
+            <div class="dashboard">
+                <h3>Quản lý người dùng</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Họ tên</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="dashboard">
+                <h3>Quản lý Drone</h3>
+                <button class="btn btn-primary" onclick="showAddDroneModal()">+ Thêm drone</button>
+                <div class="grid" id="adminDronesList" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+
+        <!-- Restaurant Dashboard -->
+        <div id="restaurantPage" class="page">
+            <h2 style="color: white; margin-bottom: 2rem;">🏪 Quản lý nhà hàng</h2>
+            
+            <div class="dashboard">
+                <h3>Món ăn của tôi</h3>
+                <button class="btn btn-primary" onclick="showAddProductModal()">+ Thêm món mới</button>
+                <div class="grid" id="restaurantProducts" style="margin-top: 1rem;"></div>
+            </div>
+
+            <div class="dashboard">
+                <h3>Đơn hàng</h3>
+                <div id="restaurantOrders"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div class="cart-sidebar" id="cartSidebar">
+        <h3>Giỏ hàng</h3>
+        <div id="cartItems"></div>
+        <div class="cart-total">
+            Tổng: <span id="cartTotal">0đ</span>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="checkout()">Thanh toán</button>
+        <button class="btn btn-outline btn-block" onclick="toggleCart()" style="margin-top: 0.5rem;">Đóng</button>
+    </div>
+
+    <!-- Add Restaurant Modal -->
+    <div class="modal" id="addRestaurantModal">
+        <div class="modal-content">
+            <h3>Thêm nhà hàng mới</h3>
+            <form id="addRestaurantForm" onsubmit="handleAddRestaurant(event)">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="resEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="resUsername" required>
+                </div>
+                <div class="form-group">
+                    <label>Mật khẩu</label>
+                    <input type="password" id="resPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Tên nhà hàng</label>
+                    <input type="text" id="resName" required>
+                </div>
+                <div class="form-group">
+                    <label>Mô tả</label>
+                    <textarea id="resDesc" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Thêm</button>
+                <button type="button" class="btn btn-outline btn-block" onclick="closeModal('addRestaurantModal')">Hủy</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div class="modal" id="addProductModal">
+        <div class="modal-content">
+            <h3>Thêm món ăn mới</h3>
+            <form id="addProductForm" onsubmit="handleAddProduct(event)">
+                <div class="form-group">
+                    <label>Tên món</label>
+                    <input type="text" id="prodName" required>
+                </div>
+                <div class="form-group">
+                    <label>Mô tả</label>
+                    <textarea id="prodDesc" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Giá (VNĐ)</label>
+                    <input type="number" id="prodPrice" required>
+                </div>
+                <div class="form-group">
+                    <label>Danh mục</label>
+                    <input type="text" id="prodCategory">
+                </div>
+                <div class="form-group">
+                    <label>Thời gian chuẩn bị (phút)</label>
+                    <input type="number" id="prodTime" value="15">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Thêm</button>
+                <button type="button" class="btn btn-outline btn-block" onclick="closeModal('addProductModal')">Hủy</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Drone Modal -->
+    <div class="modal" id="addDroneModal">
+        <div class="modal-content">
+            <h3>Thêm drone mới</h3>
+            <form id="addDroneForm" onsubmit="handleAddDrone(event)">
+                <div class="form-group">
+                    <label>Tên drone</label>
+                    <input type="text" id="droneName" required>
+                </div>
+                <div class="form-group">
+                    <label>Model</label>
+                    <input type="text" id="droneModel">
+                </div>
+                <div class="form-group">
+                    <label>Tải trọng tối đa (kg)</label>
+                    <input type="number" id="dronePayload" value="5" step="0.1">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Thêm</button>
+                <button type="button" class="btn btn-outline btn-block" onclick="closeModal('addDroneModal')">Hủy</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API = {
+            USER: 'http://localhost:8001',
+            PRODUCT: 'http://localhost:8002',
+            ORDER: 'http://localhost:8003',
+            PAYMENT: 'http://localhost:8004'
+        };
+
+        // State
+        let currentUser = null;
+        let token = null;
+        let cart = [];
+        let currentRestaurant = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            loadPopularDishes();
+        });
+
+        // Auth Functions
+        function checkAuth() {
+            token = localStorage.getItem('token');
+            const userData = localStorage.getItem('userData');
+            
+            if (token && userData) {
+                currentUser = JSON.parse(userData);
+                updateUI();
+                
+                // Navigate based on role
+                if (currentUser.role === 'admin') {
+                    navigateTo('admin');
+                } else if (currentUser.role === 'restaurant') {
+                    navigateTo('restaurant');
+                }
+            } else {
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            const navUser = document.getElementById('navUser');
+            const cartBtn = document.getElementById('cartBtn');
+            
+            if (currentUser) {
+                navUser.innerHTML = `
+                    <span style="color: var(--dark);">Xin chào, <strong>${currentUser.full_name || currentUser.username}</strong></span>
+                    <button class="btn btn-outline" onclick="logout()">Đăng xuất</button>
+                `;
+                
+                if (currentUser.role === 'customer') {
+                    cartBtn.style.display = 'block';
+                }
+            } else {
+                navUser.innerHTML = `
+                    <button class="btn btn-outline" onclick="navigateTo('login')">Đăng nhập</button>
+                    <button class="btn btn-primary" onclick="navigateTo('register')">Đăng ký</button>
+                `;
+                cartBtn.style.display = 'none';
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            showLoading(true);
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+                
+                const response = await fetch(`${API.USER}/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('Đăng nhập thất bại');
+                
+                const data = await response.json();
+                token = data.access_token;
+                currentUser = data.user;
+                
+                localStorage.setItem('token', token);
+                localStorage.setItem('userData', JSON.stringify(currentUser));
+                
+                updateUI();
+                showAlert('Đăng nhập thành công!', 'success');
+                
+                // Navigate based on role
+                if (currentUser.role === 'admin') {
+                    navigateTo('admin');
+                    loadAdminData();
+                } else if (currentUser.role === 'restaurant') {
+                    navigateTo('restaurant');
+                    loadRestaurantData();
+                } else {
+                    navigateTo('home');
+                }
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            showLoading(true);
+            
+            const userData = {
+                email: document.getElementById('regEmail').value,
+                username: document.getElementById('regUsername').value,
+                password: document.getElementById('regPassword').value,
+                full_name: document.getElementById('regFullName').value,
+                phone: document.getElementById('regPhone').value,
+                address: document.getElementById('regAddress').value,
+                role: 'customer'
+            };
+            
+            try {
+                const response = await fetch(`${API.USER}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Đăng ký thất bại');
+                }
+                
+                showAlert('Đăng ký thành công! Vui lòng đăng nhập.', 'success');
+                navigateTo('login');
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function logout() {
+            token = null;
+            currentUser = null;
+            cart = [];
+            localStorage.removeItem('token');
+            localStorage.removeItem('userData');
+            updateUI();
+            navigateTo('home');
+            showAlert('Đã đăng xuất', 'success');
+        }
+
+        // Navigation
+        function navigateTo(page) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            
+            // Show selected page
+            const pageElement = document.getElementById(`${page}Page`);
+            if (pageElement) {
+                pageElement.classList.add('active');
+                
+                // Update URL without reload
+                window.history.pushState({page}, '', `#${page}`);
+                
+                // Load page data
+                if (page === 'restaurants') loadRestaurants();
+                else if (page === 'orders') loadOrders();
+                else if (page === 'admin') loadAdminData();
+                else if (page === 'restaurant') loadRestaurantData();
+            }
+        }
+
+        // Handle browser back/forward
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.page) {
+                navigateTo(e.state.page);
+            }
+        });
+
+        // Popular Dishes
+        async function loadPopularDishes() {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.PRODUCT}/products?limit=6`);
+                const products = await response.json();
+                
+                const container = document.getElementById('popularDishes');
+                container.innerHTML = products.map(product => `
+                    <div class="card" onclick="viewRestaurantMenu(${product.restaurant_id})">
+                        <div class="card-image"></div>
+                        <div class="card-body">
+                            <h3 class="card-title">${product.name}</h3>
+                            <p class="card-text">${product.description || 'Món ăn ngon'}</p>
+                            <p class="card-price">${formatCurrency(product.price)}</p>
+                            <p style="color: #666; font-size: 0.9rem;">⏱️ ${product.preparation_time} phút</p>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading popular dishes:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Restaurants
+        async function loadRestaurants() {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.USER}/restaurants`);
+                const restaurants = await response.json();
+                
+                const container = document.getElementById('restaurantsList');
+                container.innerHTML = restaurants.map(restaurant => `
+                    <div class="card" onclick="viewRestaurantMenu(${restaurant.id})">
+                        <div class="card-image"></div>
+                        <div class="card-body">
+                            <h3 class="card-title">${restaurant.restaurant_name || restaurant.username}</h3>
+                            <p class="card-text">${restaurant.restaurant_description || 'Nhà hàng chất lượng'}</p>
+                            <button class="btn btn-primary btn-block" onclick="event.stopPropagation(); viewRestaurantMenu(${restaurant.id})">
+                                Xem thực đơn
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading restaurants:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function viewRestaurantMenu(restaurantId) {
+            showLoading(true);
+            try {
+                // Get restaurant info
+                const resResponse = await fetch(`${API.USER}/users/${restaurantId}`);
+                const restaurant = await resResponse.json();
+                currentRestaurant = restaurant;
+                
+                document.getElementById('restaurantTitle').textContent = restaurant.restaurant_name || restaurant.username;
+                
+                // Get products
+                const prodResponse = await fetch(`${API.PRODUCT}/products?restaurant_id=${restaurantId}`);
+                const products = await prodResponse.json();
+                
+                const container = document.getElementById('menuList');
+                container.innerHTML = products.map(product => `
+                    <div class="card">
+                        <div class="card-image"></div>
+                        <div class="card-body">
+                            <h3 class="card-title">${product.name}</h3>
+                            <p class="card-text">${product.description || 'Món ăn ngon'}</p>
+                            <p class="card-price">${formatCurrency(product.price)}</p>
+                            <p style="color: #666; font-size: 0.9rem;">⏱️ ${product.preparation_time} phút</p>
+                            <button onclick="addToCart(${product.id}, '${product.name}', ${product.price})" 
+                                    class="btn btn-primary btn-block"
+                                    ${!product.is_available ? 'disabled' : ''}>
+                                ${product.is_available ? '+ Thêm vào giỏ' : 'Hết hàng'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                navigateTo('menu');
+            } catch (error) {
+                showAlert('Không thể tải thực đơn', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Cart Functions
+        function addToCart(productId, productName, price) {
+            if (!currentUser) {
+                showAlert('Vui lòng đăng nhập để đặt hàng', 'error');
+                navigateTo('login');
+                return;
+            }
+            
+            const existingItem = cart.find(item => item.product_id === productId);
+            
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({
+                    product_id: productId,
+                    product_name: productName,
+                    price: price,
+                    quantity: 1
+                });
+            }
+            
+            updateCart();
+            showAlert(`Đã thêm ${productName} vào giỏ hàng`, 'success');
+        }
+
+        function updateCart() {
+            const cartItems = document.getElementById('cartItems');
+            const cartTotal = document.getElementById('cartTotal');
+            const cartCount = document.getElementById('cartCount');
+            
+            if (cart.length === 0) {
+                cartItems.innerHTML = '<p style="text-align: center; color: #666;">Giỏ hàng trống</p>';
+                cartTotal.textContent = '0đ';
+                cartCount.textContent = '0';
+                return;
+            }
+            
+            cartItems.innerHTML = cart.map(item => `
+                <div class="cart-item">
+                    <div>
+                        <strong>${item.product_name}</strong><br>
+                        <small>${formatCurrency(item.price)} x ${item.quantity}</small>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button onclick="updateCartQuantity(${item.product_id}, -1)" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">-</button>
+                        <span>${item.quantity}</span>
+                        <button onclick="updateCartQuantity(${item.product_id}, 1)" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">+</button>
+                        <button onclick="removeFromCart(${item.product_id})" class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            cartTotal.textContent = formatCurrency(total);
+            cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+        }
+
+        function updateCartQuantity(productId, change) {
+            const item = cart.find(item => item.product_id === productId);
+            if (item) {
+                item.quantity += change;
+                if (item.quantity <= 0) {
+                    removeFromCart(productId);
+                } else {
+                    updateCart();
+                }
+            }
+        }
+
+        function removeFromCart(productId) {
+            cart = cart.filter(item => item.product_id !== productId);
+            updateCart();
+        }
+
+        function toggleCart() {
+            const cartSidebar = document.getElementById('cartSidebar');
+            cartSidebar.classList.toggle('active');
+        }
+
+        async function checkout() {
+            if (cart.length === 0) {
+                showAlert('Giỏ hàng trống', 'error');
+                return;
+            }
+            
+            if (!currentRestaurant) {
+                showAlert('Vui lòng chọn nhà hàng', 'error');
+                return;
+            }
+            
+            const deliveryAddress = prompt('Nhập địa chỉ giao hàng:', currentUser.address || '');
+            if (!deliveryAddress) return;
+            
+            showLoading(true);
+            
+            try {
+                // Create order
+                const orderData = {
+                    restaurant_id: currentRestaurant.id,
+                    delivery_address: deliveryAddress,
+                    items: cart
+                };
+                
+                const orderResponse = await fetch(`${API.ORDER}/orders`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (!orderResponse.ok) throw new Error('Không thể tạo đơn hàng');
+                
+                const order = await orderResponse.json();
+                
+                // Create payment
+                const paymentData = {
+                    order_id: order.id,
+                    amount: order.total_amount,
+                    payment_method: 'credit_card'
+                };
+                
+                const paymentResponse = await fetch(`${API.PAYMENT}/payments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(paymentData)
+                });
+                
+                if (!paymentResponse.ok) throw new Error('Thanh toán thất bại');
+                
+                // Clear cart
+                cart = [];
+                updateCart();
+                toggleCart();
+                
+                showAlert('Đặt hàng thành công! Drone đang trên đường đến bạn 🚁', 'success');
+                navigateTo('orders');
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Orders
+        async function loadOrders() {
+            if (!currentUser) {
+                showAlert('Vui lòng đăng nhập', 'error');
+                navigateTo('login');
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.ORDER}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Không thể tải đơn hàng');
+                
+                const orders = await response.json();
+                
+                const container = document.getElementById('ordersList');
+                
+                if (orders.length === 0) {
+                    container.innerHTML = '<div style="background: white; padding: 2rem; border-radius: 15px; text-align: center;">Chưa có đơn hàng nào</div>';
+                    return;
+                }
+                
+                container.innerHTML = orders.map(order => `
+                    <div style="background: white; padding: 1.5rem; border-radius: 15px; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #f0f0f0;">
+                            <div>
+                                <strong>Đơn hàng #${order.id}</strong><br>
+                                <small>${new Date(order.created_at).toLocaleString('vi-VN')}</small>
+                            </div>
+                            <span style="padding: 0.5rem 1rem; border-radius: 20px; background: ${getStatusColor(order.status)}; color: white; font-weight: 600;">
+                                ${getStatusText(order.status)}
+                            </span>
+                        </div>
+                        <div>
+                            ${order.items.map(item => `
+                                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                                    <span>${item.product_name} x${item.quantity}</span>
+                                    <span>${formatCurrency(item.price * item.quantity)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid #f0f0f0;">
+                            <strong>Địa chỉ:</strong> ${order.delivery_address}<br>
+                            <strong>Tổng tiền:</strong> ${formatCurrency(order.total_amount)}<br>
+                            ${order.drone_id ? `<strong>Drone:</strong> #${order.drone_id} 🚁` : ''}
+                            ${order.estimated_delivery_time ? `<br><strong>Thời gian giao:</strong> ~${order.estimated_delivery_time} phút` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Admin Functions
+        async function loadAdminData() {
+            showLoading(true);
+            try {
+                // Load stats
+                const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
+                    fetch(`${API.USER}/users/me`, { headers: { 'Authorization': `Bearer ${token}` }}),
+                    fetch(`${API.USER}/restaurants`),
+                    fetch(`${API.ORDER}/orders`, { headers: { 'Authorization': `Bearer ${token}` }}),
+                    fetch(`${API.ORDER}/drones`)
+                ]);
+                
+                const restaurants = await restaurantsRes.json();
+                const orders = await ordersRes.json();
+                const drones = await dronesRes.json();
+                
+                document.getElementById('totalUsers').textContent = '10+';
+                document.getElementById('totalRestaurants').textContent = restaurants.length;
+                document.getElementById('totalOrders').textContent = orders.length;
+                document.getElementById('totalDrones').textContent = drones.length;
+                
+                // Load restaurants table
+                const resTable = document.getElementById('adminRestaurantsList');
+                resTable.innerHTML = restaurants.map(r => `
+                    <tr>
+                        <td>${r.id}</td>
+                        <td>${r.restaurant_name || 'N/A'}</td>
+                        <td>${r.email}</td>
+                        <td>${r.username}</td>
+                        <td>
+                            <button class="btn btn-outline" style="padding: 0.25rem 0.75rem;" onclick="viewRestaurantProducts(${r.id})">Xem món</button>
+                            <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.75rem;" onclick="deleteUser(${r.id})">Xóa</button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Load drones
+                const dronesContainer = document.getElementById('adminDronesList');
+                dronesContainer.innerHTML = drones.map(drone => `
+                    <div class="card">
+                        <div class="card-image" style="background: linear-gradient(135deg, #667eea, #764ba2);"></div>
+                        <div class="card-body">
+                            <h3 class="card-title">${drone.name}</h3>
+                            <p class="card-text">Model: ${drone.model || 'N/A'}</p>
+                            <p class="card-text">🔋 Pin: ${drone.battery_level.toFixed(1)}%</p>
+                            <p class="card-text">📦 Tải trọng: ${drone.max_payload} kg</p>
+                            <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: ${getDroneStatusColor(drone.status)}; color: white; font-size: 0.85rem;">
+                                ${getDroneStatusText(drone.status)}
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Load users (mock data since we don't have endpoint)
+                const usersTable = document.getElementById('adminUsersList');
+                usersTable.innerHTML = '<tr><td colspan="5" style="text-align: center;">Đang tải...</td></tr>';
+                
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function viewRestaurantProducts(restaurantId) {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.PRODUCT}/products?restaurant_id=${restaurantId}`);
+                const products = await response.json();
+                
+                const modal = document.createElement('div');
+                modal.className = 'modal active';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <h3>Danh sách món ăn</h3>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            ${products.map(p => `
+                                <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0;">
+                                    <strong>${p.name}</strong><br>
+                                    <small>${p.description || ''}</small><br>
+                                    <strong style="color: var(--success);">${formatCurrency(p.price)}</strong>
+                                </div>
+                            `).join('') || '<p>Chưa có món ăn nào</p>'}
+                        </div>
+                        <button class="btn btn-outline btn-block" onclick="this.parentElement.parentElement.remove()">Đóng</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (error) {
+                showAlert('Không thể tải danh sách món', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Restaurant Functions
+        async function loadRestaurantData() {
+            showLoading(true);
+            try {
+                // Load products
+                const prodResponse = await fetch(`${API.PRODUCT}/products?restaurant_id=${currentUser.id}`);
+                const products = await prodResponse.json();
+                
+                const container = document.getElementById('restaurantProducts');
+                container.innerHTML = products.map(product => `
+                    <div class="card">
+                        <div class="card-image"></div>
+                        <div class="card-body">
+                            <h3 class="card-title">${product.name}</h3>
+                            <p class="card-text">${product.description || ''}</p>
+                            <p class="card-price">${formatCurrency(product.price)}</p>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                <button class="btn btn-outline" style="flex: 1;" onclick="editProduct(${product.id})">Sửa</button>
+                                <button class="btn" style="flex: 1; background: var(--danger); color: white;" onclick="deleteProduct(${product.id})">Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                if (products.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: white;">Chưa có món ăn nào. Hãy thêm món mới!</p>';
+                }
+                
+                // Load orders
+                const ordersResponse = await fetch(`${API.ORDER}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const orders = await ordersResponse.json();
+                
+                const ordersContainer = document.getElementById('restaurantOrders');
+                ordersContainer.innerHTML = orders.map(order => `
+                    <div style="background: white; padding: 1.5rem; border-radius: 15px; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <div>
+                                <strong>Đơn hàng #${order.id}</strong><br>
+                                <small>${new Date(order.created_at).toLocaleString('vi-VN')}</small>
+                            </div>
+                            <span style="padding: 0.5rem 1rem; border-radius: 20px; background: ${getStatusColor(order.status)}; color: white;">
+                                ${getStatusText(order.status)}
+                            </span>
+                        </div>
+                        <div>
+                            ${order.items.map(item => `<div>${item.product_name} x${item.quantity}</div>`).join('')}
+                        </div>
+                        <div style="margin-top: 1rem; font-weight: bold;">
+                            Tổng: ${formatCurrency(order.total_amount)}
+                        </div>
+                        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="updateOrderStatus(${order.id}, '${getNextStatus(order.status)}')">
+                            Cập nhật trạng thái
+                        </button>
+                    </div>
+                `).join('') || '<p style="text-align: center;">Chưa có đơn hàng nào</p>';
+                
+            } catch (error) {
+                console.error('Error loading restaurant data:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function updateOrderStatus(orderId, newStatus) {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.ORDER}/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                if (!response.ok) throw new Error('Không thể cập nhật');
+                
+                showAlert('Đã cập nhật trạng thái đơn hàng', 'success');
+                loadRestaurantData();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Modal Functions
+        function showAddRestaurantModal() {
+            document.getElementById('addRestaurantModal').classList.add('active');
+        }
+
+        function showAddProductModal() {
+            document.getElementById('addProductModal').classList.add('active');
+        }
+
+        function showAddDroneModal() {
+            document.getElementById('addDroneModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        async function handleAddRestaurant(e) {
+            e.preventDefault();
+            showLoading(true);
+            
+            const data = {
+                email: document.getElementById('resEmail').value,
+                username: document.getElementById('resUsername').value,
+                password: document.getElementById('resPassword').value,
+                restaurant_name: document.getElementById('resName').value,
+                restaurant_description: document.getElementById('resDesc').value,
+                role: 'restaurant'
+            };
+            
+            try {
+                const response = await fetch(`${API.USER}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) throw new Error('Không thể thêm nhà hàng');
+                
+                showAlert('Đã thêm nhà hàng thành công', 'success');
+                closeModal('addRestaurantModal');
+                loadAdminData();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function handleAddProduct(e) {
+            e.preventDefault();
+            showLoading(true);
+            
+            const data = {
+                restaurant_id: currentUser.id,
+                name: document.getElementById('prodName').value,
+                description: document.getElementById('prodDesc').value,
+                price: parseFloat(document.getElementById('prodPrice').value),
+                category: document.getElementById('prodCategory').value,
+                preparation_time: parseInt(document.getElementById('prodTime').value)
+            };
+            
+            try {
+                const response = await fetch(`${API.PRODUCT}/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) throw new Error('Không thể thêm món');
+                
+                showAlert('Đã thêm món ăn thành công', 'success');
+                closeModal('addProductModal');
+                loadRestaurantData();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function handleAddDrone(e) {
+            e.preventDefault();
+            showLoading(true);
+            
+            const data = {
+                name: document.getElementById('droneName').value,
+                model: document.getElementById('droneModel').value,
+                max_payload: parseFloat(document.getElementById('dronePayload').value)
+            };
+            
+            try {
+                const response = await fetch(`${API.ORDER}/drones`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) throw new Error('Không thể thêm drone');
+                
+                showAlert('Đã thêm drone thành công', 'success');
+                closeModal('addDroneModal');
+                loadAdminData();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteProduct(productId) {
+            if (!confirm('Bạn có chắc muốn xóa món này?')) return;
+            
+            showLoading(true);
+            try {
+                const response = await fetch(`${API.PRODUCT}/products/${productId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Không thể xóa');
+                
+                showAlert('Đã xóa món ăn', 'success');
+                loadRestaurantData();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Utility Functions
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        }
+
+        function showAlert(message, type) {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 3000);
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(amount);
+        }
+
+        function getStatusText(status) {
+            const map = {
+                'pending': 'Chờ xác nhận',
+                'confirmed': 'Đã xác nhận',
+                'preparing': 'Đang chuẩn bị',
+                'ready': 'Sẵn sàng',
+                'in_delivery': 'Đang giao',
+                'delivered': 'Đã giao',
+                'cancelled': 'Đã hủy'
+            };
+            return map[status] || status;
+        }
+
+        function getStatusColor(status) {
+            const map = {
+                'pending': '#ffc107',
+                'confirmed': '#2196f3',
+                'preparing': '#ff5722',
+                'ready': '#4caf50',
+                'in_delivery': '#9c27b0',
+                'delivered': '#4caf50',
+                'cancelled': '#f44336'
+            };
+            return map[status] || '#666';
+        }
+
+        function getNextStatus(currentStatus) {
+            const sequence = ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered'];
+            const currentIndex = sequence.indexOf(currentStatus);
+            return sequence[currentIndex + 1] || currentStatus;
+        }
+
+        function getDroneStatusText(status) {
+            const map = {
+                'idle': 'Sẵn sàng',
+                'in_use': 'Đang giao hàng',
+                'maintenance': 'Bảo trì'
+            };
+            return map[status] || status;
+        }
+
+        function getDroneStatusColor(status) {
+            const map = {
+                'idle': '#4caf50',
+                'in_use': '#ff9800',
+                'maintenance': '#f44336'
+            };
+            return map[status] || '#666';
+        }
+    </script>
 </body>
 </html>
