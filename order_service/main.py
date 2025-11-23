@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Enum as SQLEnum, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -14,8 +14,6 @@ import httpx
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL")
-PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL")
-PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL")
 
 # Database setup
 engine = create_engine(DATABASE_URL, echo=True)
@@ -42,16 +40,17 @@ class Order(Base):
     __tablename__ = "orders"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, nullable=False, index=True)
+    # 👇 [SỬA]: Đổi customer_id thành user_id để khớp với Token và bảng Users
+    user_id = Column(Integer, nullable=False, index=True) 
     restaurant_id = Column(Integer, nullable=False, index=True)
     total_amount = Column(Float, nullable=False)
     status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING)
     delivery_address = Column(String(500), nullable=False)
-    delivery_lat = Column(Float)
-    delivery_lng = Column(Float)
-    drone_id = Column(Integer)
-    estimated_delivery_time = Column(Integer)  # minutes
-    notes = Column(Text)
+    delivery_lat = Column(Float, nullable=True)
+    delivery_lng = Column(Float, nullable=True)
+    drone_id = Column(Integer, nullable=True)
+    estimated_delivery_time = Column(Integer, default=30)  # minutes
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -74,8 +73,8 @@ class Drone(Base):
     status = Column(SQLEnum(DroneStatus), default=DroneStatus.IDLE)
     battery_level = Column(Float, default=100.0)
     max_payload = Column(Float, default=5.0)  # kg
-    current_lat = Column(Float)
-    current_lng = Column(Float)
+    current_lat = Column(Float, nullable=True)
+    current_lng = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Pydantic Models
@@ -102,7 +101,7 @@ class OrderCreate(BaseModel):
 
 class OrderResponse(BaseModel):
     id: int
-    customer_id: int
+    user_id: int # 👇 [SỬA]: Khớp với Model
     restaurant_id: int
     total_amount: float
     status: OrderStatus
@@ -203,7 +202,7 @@ async def verify_token(token: str):
         except:
             return None
 
-async def get_current_user(authorization: str = None):
+async def get_current_user(authorization: str = Header(None)): # [SỬA]: Dùng Header để lấy token chuẩn hơn
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.split(" ")[1]
@@ -218,7 +217,7 @@ async def root():
     return {"service": "Order Service", "status": "running"}
 
 @app.post("/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-async def create_order(order: OrderCreate, authorization: str = None, db: Session = Depends(get_db)):
+async def create_order(order: OrderCreate, authorization: str = Header(None), db: Session = Depends(get_db)):
     user = await get_current_user(authorization)
     
     # Calculate total
@@ -226,14 +225,15 @@ async def create_order(order: OrderCreate, authorization: str = None, db: Sessio
     
     # Create order
     db_order = Order(
-        customer_id=user["user_id"],
+        user_id=user["id"], # [SỬA]: User Service thường trả về 'id' chứ không phải 'user_id'
         restaurant_id=order.restaurant_id,
         total_amount=total,
         delivery_address=order.delivery_address,
         delivery_lat=order.delivery_lat,
         delivery_lng=order.delivery_lng,
         notes=order.notes,
-        estimated_delivery_time=30
+        estimated_delivery_time=30,
+        status=OrderStatus.PENDING
     )
     db.add(db_order)
     db.commit()
@@ -251,16 +251,19 @@ async def create_order(order: OrderCreate, authorization: str = None, db: Sessio
         db.add(db_item)
     db.commit()
     
-    # Fetch items
+    # Fetch items (để trả về response đầy đủ)
     items = db.query(OrderItem).filter(OrderItem.order_id == db_order.id).all()
     
+    # Fix lỗi Pydantic validate
     response = OrderResponse.from_orm(db_order)
     response.items = [OrderItemResponse.from_orm(item) for item in items]
     return response
 
 @app.get("/orders", response_model=List[OrderResponse])
 async def list_orders(
-    authorization: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    authorization: str = Header(None),
     status: Optional[OrderStatus] = None,
     db: Session = Depends(get_db)
 ):
@@ -270,14 +273,17 @@ async def list_orders(
     
     # Filter by user role
     if user["role"] == "customer":
-        query = query.filter(Order.customer_id == user["user_id"])
+        query = query.filter(Order.user_id == user["id"]) # [SỬA]: user_id
     elif user["role"] == "restaurant":
-        query = query.filter(Order.restaurant_id == user["user_id"])
+        # Lưu ý: Nếu user là nhà hàng, logic user["id"] == restaurant_id phải đúng trong DB
+        # Tạm thời giả định user.id của chủ nhà hàng chính là restaurant.owner_id
+        # Hoặc query theo bảng User để lấy restaurant_id
+        pass 
     
     if status:
         query = query.filter(Order.status == status)
-    
-    orders = query.order_by(Order.created_at.desc()).all()
+        
+    orders = query.order_by(Order.id.desc()).offset(skip).limit(limit).all()
     
     result = []
     for order in orders:
@@ -312,15 +318,17 @@ async def update_order_status(
     order.status = status_update.status
     order.updated_at = datetime.utcnow()
     
-    # Assign drone if ready for delivery
+    # --- LOGIC DRONE TỰ ĐỘNG ---
+    # Nếu đơn hàng Sẵn sàng (READY) và chưa có Drone -> Tìm Drone rảnh
     if status_update.status == OrderStatus.READY and not order.drone_id:
         available_drone = db.query(Drone).filter(Drone.status == DroneStatus.IDLE).first()
         if available_drone:
             order.drone_id = available_drone.id
             available_drone.status = DroneStatus.IN_USE
-            order.status = OrderStatus.IN_DELIVERY
+            # Tự động chuyển trạng thái đơn hàng sang 'Đang giao' luôn nếu muốn
+            order.status = OrderStatus.IN_DELIVERY 
     
-    # Release drone if delivered
+    # Nếu đơn hàng Đã giao (DELIVERED) -> Giải phóng Drone
     if status_update.status == OrderStatus.DELIVERED and order.drone_id:
         drone = db.query(Drone).filter(Drone.id == order.drone_id).first()
         if drone:

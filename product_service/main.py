@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -9,12 +10,19 @@ from datetime import datetime
 import os
 import time
 import httpx
+import shutil
+import uuid
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL")
+
+# --- [QUAN TRỌNG] CẤU HÌNH THƯ MỤC ẢNH ---
+UPLOAD_DIR = "static/images"
+# Tạo thư mục nếu chưa có
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Database setup
 engine = create_engine(DATABASE_URL, echo=True)
@@ -24,19 +32,19 @@ Base = declarative_base()
 # Database Models
 class Product(Base):
     __tablename__ = "products"
-    
     id = Column(Integer, primary_key=True, index=True)
     restaurant_id = Column(Integer, nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     price = Column(Float, nullable=False)
+    original_price = Column(Float) # Giữ nguyên cột này từ code cũ của bạn
     image_url = Column(String(500))
     category = Column(String(100))
-    is_available = Column(Integer, default=1)
+    is_available = Column(Integer, default=1) # SQLite/MySQL đôi khi dùng Int cho bool
     preparation_time = Column(Integer, default=15)  # minutes
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# Pydantic Models
+# Pydantic Models (Giữ lại để dùng cho Response model và Swagger UI)
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -77,6 +85,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- [MỚI] MOUNT THƯ MỤC STATIC ĐỂ XEM ẢNH ---
+# Truy cập ảnh qua: http://localhost:8002/static/images/ten_anh.jpg
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Database dependency
 def get_db():
@@ -129,13 +141,49 @@ async def get_current_user(authorization: str = None):
 async def root():
     return {"service": "Product Service", "status": "running"}
 
+# --- [CẬP NHẬT QUAN TRỌNG] API TẠO MỚI CÓ UPLOAD ẢNH ---
 @app.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
-    db_product = Product(**product.dict())
-    db.add(db_product)
+async def create_product(
+    name: str = Form(...),
+    price: float = Form(...),
+    restaurant_id: int = Form(...),
+    description: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
+    preparation_time: int = Form(15),
+    is_available: bool = Form(True),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    image_path_db = None
+    if image:
+        try:
+            file_extension = image.filename.split(".")[-1]
+            file_name = f"{uuid.uuid4()}.{file_extension}"
+            file_location = f"{UPLOAD_DIR}/{file_name}"
+            
+            with open(file_location, "wb") as buffer:
+                shutil.copyfileobj(image.file, buffer)
+            
+            # Lưu đường dẫn tương đối
+            image_path_db = f"/static/images/{file_name}" 
+        except Exception as e:
+            print(f"Error saving image: {e}")
+
+    new_product = Product(
+        name=name,
+        price=price,
+        restaurant_id=restaurant_id,
+        description=description,
+        category=category,
+        preparation_time=preparation_time,
+        is_available=1 if is_available else 0,
+        image_url=image_path_db 
+    )
+    
+    db.add(new_product)
     db.commit()
-    db.refresh(db_product)
-    return db_product
+    db.refresh(new_product)
+    return new_product  
 
 @app.get("/products", response_model=List[ProductResponse])
 async def list_products(
@@ -152,7 +200,7 @@ async def list_products(
     if category:
         query = query.filter(Product.category == category)
     
-    products = query.offset(skip).limit(limit).all()
+    products = query.order_by(Product.id).offset(skip).limit(limit).all()
     return products
 
 @app.get("/products/{product_id}", response_model=ProductResponse)

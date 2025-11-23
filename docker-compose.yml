@@ -1,9 +1,12 @@
 version: '3.8'
 
 services:
-  sqlserver:
+  # ==========================================
+  # SHARED DATABASE (Single Instance)
+  # ==========================================
+  shared_db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: drone_delivery_db
+    container_name: shared_db
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=Khangle18
@@ -11,61 +14,148 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - sqlserver_data:/var/opt/mssql
+      - mssql_data:/var/opt/mssql
     networks:
       - drone_network
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -Q "SELECT 1" -C
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -Q "SELECT 1" -C || exit 1
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
+    # Script khởi tạo 4 Database riêng biệt
+    command: >
+      bash -c "
+      /opt/mssql/bin/sqlservr &
+      echo 'Waiting for SQL Server to start...' &&
+      sleep 30 &&
+      echo '--- Initializing UserDB ---' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"UserDB\") BEGIN CREATE DATABASE UserDB; END' &&
+      
+      echo '--- Initializing ProductDB ---' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"ProductDB\") BEGIN CREATE DATABASE ProductDB; END' &&
+      
+      echo '--- Initializing OrderDB ---' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"OrderDB\") BEGIN CREATE DATABASE OrderDB; END' &&
+      
+      echo '--- Initializing PaymentDB ---' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"PaymentDB\") BEGIN CREATE DATABASE PaymentDB; END' &&
+      
+      echo 'All Databases initialized successfully' &&
+      wait
+      "
 
+  # ==========================================
+  # BACKEND SERVICES
+  # ==========================================
   user_service:
     build: ./user_service
     container_name: user_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/UserDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - JWT_SECRET=secret
       - JWT_ALGORITHM=HS256
-    ports: ["8001:8000"]
-    depends_on:
-      sqlserver:
-        condition: service_healthy
     networks:
       - drone_network
-    # Thêm lệnh chờ DB thật kỹ rồi mới chạy app
-    command: >
-      sh -c "sleep 10 && uvicorn main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      shared_db:
+        condition: service_healthy
+    restart: unless-stopped
 
   product_service:
     build: ./product_service
     container_name: product_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@sqlserver:1433/DroneDeliveryDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/ProductDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - USER_SERVICE_URL=http://user_service:8000
-    ports: ["8002:8000"]
-    depends_on:
-      user_service:
-        condition: service_started
+      - JWT_SECRET=secret  # <--- QUAN TRỌNG: Để verify token từ User Service
+    volumes:
+      - product_images:/app/static/images # <--- QUAN TRỌNG: Giữ ảnh không bị mất
     networks:
       - drone_network
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      shared_db:
+        condition: service_healthy
+      user_service:
+        condition: service_started
+    restart: unless-stopped
 
-  # ... (Giữ nguyên order_service, payment_service tương tự product_service) ...
-  # Để gọn, tôi chỉ liệt kê các service chính bị lỗi ở trên. 
-  # Các service khác bạn giữ nguyên như cũ, chỉ cần đảm bảo chung network.
+  order_service:
+    build: ./order_service
+    container_name: order_service
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/OrderDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - USER_SERVICE_URL=http://user_service:8000/api/users
+      - PRODUCT_SERVICE_URL=http://product_service:8000
+      - JWT_SECRET=secret  # <--- QUAN TRỌNG: Sửa lỗi 401
+    networks:
+      - drone_network
+    depends_on:
+      shared_db:
+        condition: service_healthy
+      user_service:
+        condition: service_started
+      product_service:
+        condition: service_started
+    restart: unless-stopped
 
+  payment_service:
+    build: ./payment_service
+    container_name: payment_service
+    environment:
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/PaymentDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - USER_SERVICE_URL=http://user_service:8000
+      - ORDER_SERVICE_URL=http://order_service:8000
+      - JWT_SECRET=secret  # <--- QUAN TRỌNG
+    networks:
+      - drone_network
+    depends_on:
+      shared_db:
+        condition: service_healthy
+      user_service:
+        condition: service_started
+      order_service:
+        condition: service_started
+    restart: unless-stopped
+
+  # ==========================================
+  # FRONTEND
+  # ==========================================
   frontend:
     build: ./frontend
     container_name: frontend
-    ports: ["3000:80"]
     networks:
       - drone_network
+    restart: unless-stopped
 
+  # ==========================================
+  # NGINX API GATEWAY
+  # ==========================================
+  nginx:
+    build: ./nginx
+    container_name: nginx_gateway
+    ports:
+      - "80:80"
+    networks:
+      - drone_network
+    depends_on:
+      - user_service
+      - product_service
+      - order_service
+      - payment_service
+      - frontend
+    restart: unless-stopped
+
+# ==========================================
+# NETWORK
+# ==========================================
 networks:
   drone_network:
     driver: bridge
 
+# ==========================================
+# VOLUMES
+# ==========================================
 volumes:
-  sqlserver_data:
+  mssql_data:       # Lưu dữ liệu SQL
+  product_images:   # Lưu ảnh món ăn upload lên

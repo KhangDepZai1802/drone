@@ -1,867 +1,678 @@
+// ============================================
+// 1. CONFIGURATION & STATE
+// ============================================
+const API = {
+    USER: 'http://localhost/api/users',
+    PRODUCT: 'http://localhost/api/products',
+    ORDER: 'http://localhost/api/orders',
+    PAYMENT: 'http://localhost/api/payments',
+    // URL gốc để load ảnh từ Product Service (Port 8002)
+    IMAGE_BASE: 'http://localhost:8002' 
+};
 
-        // API Configuration
-        const API = {
-            USER: 'http://localhost:8001',
-            PRODUCT: 'http://localhost:8002',
-            ORDER: 'http://localhost:8003',
-            PAYMENT: 'http://localhost:8004'
+let currentUser = null;
+let token = null;
+let allRestaurants = [];
+
+// [FIX] 1. Load giỏ hàng từ LocalStorage để không bị mất khi F5
+let cart = JSON.parse(localStorage.getItem('drone_cart')) || [];
+
+// Hàm lưu giỏ hàng
+function saveCart() {
+    localStorage.setItem('drone_cart', JSON.stringify(cart));
+    updateNavbar();
+}
+
+// Helper lấy ảnh chuẩn
+function getImageUrl(path) {
+    if (!path) return 'https://via.placeholder.com/150?text=No+Image';
+    if (path.startsWith('http')) return path;
+    return `${API.IMAGE_BASE}${path}`;
+}
+
+// ============================================
+// 2. FETCH WITH ERROR HANDLING
+// ============================================
+
+async function fetchAPI(url, options = {}) {
+    try {
+        const headers = {
+            ...options.headers
         };
 
-        // State
-        let currentUser = null;
-        let token = null;
-        let cart = [];
-        let currentRestaurant = null;
+        // Nếu không phải gửi File (FormData) thì mặc định là JSON
+        if (!(options.body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            checkAuth();
-            loadPopularDishes();
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(url, {
+            ...options,
+            headers,
+            mode: 'cors',
+            credentials: 'same-origin'
         });
 
-        // Auth Functions
-        function checkAuth() {
-            token = localStorage.getItem('token');
-            const userData = localStorage.getItem('userData');
-            
-            if (token && userData) {
-                currentUser = JSON.parse(userData);
-                updateUI();
-                
-                // Navigate based on role
-                if (currentUser.role === 'admin') {
-                    navigateTo('admin');
-                } else if (currentUser.role === 'restaurant') {
-                    navigateTo('restaurant');
-                }
-            } else {
-                updateUI();
-            }
-        }
+        console.log(`📡 [${options.method || 'GET'}] ${url} -> ${response.status}`);
 
-        function updateUI() {
-            const navUser = document.getElementById('navUser');
-            const cartBtn = document.getElementById('cartBtn');
-            
-            if (currentUser) {
-                navUser.innerHTML = `
-                    <span style="color: var(--dark);">Xin chào, <strong>${currentUser.full_name || currentUser.username}</strong></span>
-                    <button class="btn btn-outline" onclick="logout()">Đăng xuất</button>
-                `;
-                
-                if (currentUser.role === 'customer') {
-                    cartBtn.style.display = 'block';
-                }
-            } else {
-                navUser.innerHTML = `
-                    <button class="btn btn-outline" onclick="navigateTo('login')">Đăng nhập</button>
-                    <button class="btn btn-primary" onclick="navigateTo('register')">Đăng ký</button>
-                `;
-                cartBtn.style.display = 'none';
-            }
-        }
-
-        async function handleLogin(e) {
-            e.preventDefault();
-            showLoading(true);
-            
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-            
+        if (!response.ok) {
+            let errorMsg;
+            const errorText = await response.text();
             try {
-                const formData = new URLSearchParams();
-                formData.append('username', username);
-                formData.append('password', password);
-                
-                const response = await fetch(`${API.USER}/token`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: formData
-                });
-                
-                if (!response.ok) throw new Error('Đăng nhập thất bại');
-                
-                const data = await response.json();
-                token = data.access_token;
-                currentUser = data.user;
-                
-                localStorage.setItem('token', token);
-                localStorage.setItem('userData', JSON.stringify(currentUser));
-                
-                updateUI();
-                showAlert('Đăng nhập thành công!', 'success');
-                
-                // Navigate based on role
-                if (currentUser.role === 'admin') {
-                    navigateTo('admin');
-                    loadAdminData();
-                } else if (currentUser.role === 'restaurant') {
-                    navigateTo('restaurant');
-                    loadRestaurantData();
-                } else {
-                    navigateTo('home');
-                }
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
+                const errorData = JSON.parse(errorText);
+                errorMsg = errorData.detail || errorData.message || `HTTP ${response.status}`;
+            } catch {
+                errorMsg = errorText || `HTTP ${response.status}`;
             }
+            console.error(`🔥 Server Error:`, errorMsg);
+            
+            // Nếu lỗi 401 (Hết hạn token) -> Logout
+            if (response.status === 401) {
+                handleLogout();
+            }
+            throw new Error(errorMsg);
         }
 
-        async function handleRegister(e) {
-            e.preventDefault();
-            showLoading(true);
+        return await response.json();
+    } catch (error) {
+        console.error(`❌ API Error: ${url}`, error);
+        throw error;
+    }
+}
+
+// ============================================
+// 3. NAVIGATION & UI
+// ============================================
+
+window.navigateTo = function(pageId) {
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+
+    let targetId = pageId;
+    if (!pageId.endsWith('Page') && !pageId.endsWith('Dashboard')) {
+        targetId = pageId.includes('Dashboard') ? pageId : pageId + 'Page';
+    }
+
+    const targetPage = document.getElementById(targetId);
+    if (targetPage) {
+        targetPage.classList.add('active');
+        window.scrollTo(0, 0);
+        
+        if (pageId === 'orders') loadOrders();
+        if (pageId === 'restaurants') loadRestaurants();
+        if (pageId === 'adminDashboard') loadAdminData();
+        // [FIX] Gọi đúng hàm load dữ liệu quản lý nhà hàng
+        if (pageId === 'restaurantDashboard') loadRestaurantData();
+        if (pageId === 'checkoutPage') loadCheckoutPage(); // Load data cho trang thanh toán
+    } else {
+        console.error(`Page not found: ${targetId}`);
+    }
+}
+
+window.openCart = function() {
+    document.getElementById('cartModal').classList.add('active');
+    renderCart();
+}
+
+window.closeCart = function() {
+    document.getElementById('cartModal').classList.remove('active');
+}
+
+// ============================================
+// 4. INITIALIZATION
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    updateNavbar(); // Update số lượng giỏ hàng ngay khi load
+    
+    // Nếu đang ở trang chủ
+    if (!currentUser || currentUser.role !== 'admin') {
+        loadPopularDishes();
+    }
+    setupEventListeners();
+});
+
+function checkAuth() {
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('userData');
+    
+    if (storedToken && storedUser) {
+        token = storedToken;
+        currentUser = JSON.parse(storedUser);
+    }
+    updateNavbar();
+}
+
+function updateNavbar() {
+    const menuContainer = document.getElementById('navbarMenu');
+    const actionsContainer = document.getElementById('navbarActions');
+    
+    if (!menuContainer || !actionsContainer) return;
+
+    let menuHtml = '';
+
+    if (currentUser && currentUser.role === 'admin') {
+        menuHtml = `<a href="#" onclick="navigateTo('adminDashboard'); return false;" class="nav-link">Quản trị hệ thống</a>`;
+    } else {
+        menuHtml = `
+            <a href="#" onclick="navigateTo('home'); return false;" class="nav-link">Trang chủ</a>
+            <a href="#" onclick="navigateTo('restaurants'); return false;" class="nav-link">Nhà hàng</a>
+        `;
+
+        if (currentUser) {
+            menuHtml += `<a href="#" onclick="navigateTo('orders'); return false;" class="nav-link">Đơn hàng</a>`;
             
-            const userData = {
-                email: document.getElementById('regEmail').value,
-                username: document.getElementById('regUsername').value,
-                password: document.getElementById('regPassword').value,
-                full_name: document.getElementById('regFullName').value,
-                phone: document.getElementById('regPhone').value,
-                address: document.getElementById('regAddress').value,
-                role: 'customer'
-            };
-            
-            try {
-                const response = await fetch(`${API.USER}/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(userData)
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Đăng ký thất bại');
-                }
-                
-                showAlert('Đăng ký thành công! Vui lòng đăng nhập.', 'success');
-                navigateTo('login');
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
+            if (currentUser.role === 'restaurant') {
+                menuHtml += `<a href="#" onclick="navigateTo('restaurantDashboard'); return false;" class="nav-link">Quản lý</a>`;
             }
         }
+    }
 
-        function logout() {
-            token = null;
-            currentUser = null;
-            cart = [];
-            localStorage.removeItem('token');
-            localStorage.removeItem('userData');
-            updateUI();
+    menuContainer.innerHTML = menuHtml;
+
+    if (currentUser) {
+        let cartHtml = '';
+        if (currentUser.role !== 'admin') {
+            cartHtml = `
+            <div class="cart-btn-wrapper" onclick="openCart()" style="cursor: pointer; margin-right: 15px; position: relative;">
+                <span style="font-size: 24px;">🛒</span>
+                <span class="badge" id="cartCount" style="background: red; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; position: absolute; top: -5px; right: -10px;">
+                    ${cart.reduce((a, b) => a + b.quantity, 0)}
+                </span>
+            </div>`;
+        }
+
+        actionsContainer.innerHTML = `
+            ${cartHtml}
+            <div class="user-dropdown">
+                <span>Xin chào, <b>${currentUser.full_name || currentUser.username}</b></span>
+                <button class="btn btn-sm btn-outline" onclick="handleLogout()">Đăng xuất</button>
+            </div>
+        `;
+    } else {
+        actionsContainer.innerHTML = `
+            <button class="btn btn-text" onclick="navigateTo('login')">Đăng nhập</button>
+            <button class="btn btn-primary" onclick="navigateTo('register')">Đăng ký</button>
+        `;
+    }
+}
+
+// ============================================
+// 5. AUTHENTICATION
+// ============================================
+
+window.handleLogin = async function(e) {
+    e.preventDefault();
+    showLoading(true);
+
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const response = await fetch(`${API.USER}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData,
+            mode: 'cors'
+        });
+
+        if (!response.ok) throw new Error('Sai tài khoản hoặc mật khẩu');
+
+        const data = await response.json();
+        
+        token = data.access_token;
+        currentUser = data.user;
+        localStorage.setItem('token', token);
+        localStorage.setItem('userData', JSON.stringify(currentUser));
+
+        showToast('✅ Đăng nhập thành công!', 'success');
+        updateNavbar();
+        
+        if (currentUser.role === 'admin') {
+            navigateTo('adminDashboard');
+        } else if (currentUser.role === 'restaurant') {
+            navigateTo('restaurantDashboard');
+        } else {
             navigateTo('home');
-            showAlert('Đã đăng xuất', 'success');
         }
 
-        // Navigation
-        function navigateTo(page) {
-            // Hide all pages
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            
-            // Show selected page
-            const pageElement = document.getElementById(`${page}Page`);
-            if (pageElement) {
-                pageElement.classList.add('active');
-                
-                // Update URL without reload
-                window.history.pushState({page}, '', `#${page}`);
-                
-                // Load page data
-                if (page === 'restaurants') loadRestaurants();
-                else if (page === 'orders') loadOrders();
-                else if (page === 'admin') loadAdminData();
-                else if (page === 'restaurant') loadRestaurantData();
-            }
+    } catch (error) {
+        showToast('❌ ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+window.handleLogout = function() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userData');
+    token = null;
+    currentUser = null;
+    // [FIX] Không xóa cart khi logout để trải nghiệm tốt hơn, hoặc tùy bạn
+    // cart = []; 
+    updateNavbar();
+    navigateTo('home');
+    showToast('Đã đăng xuất', 'info');
+}
+
+// ... (Code Register giữ nguyên) ...
+
+// ============================================
+// 6. RESTAURANTS & PRODUCTS
+// ============================================
+
+// ... (Code loadPopularDishes giữ nguyên) ...
+
+async function loadRestaurants() {
+    showLoading(true);
+    try {
+        const restaurants = await fetchAPI(`${API.USER}/restaurants`);
+        allRestaurants = restaurants; // Lưu lại để filter
+
+        // [IMAGE] Cập nhật render ảnh nhà hàng
+        renderRestaurantsList(restaurants);
+    } catch (error) {
+        showToast('❌ Lỗi tải nhà hàng: ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function renderRestaurantsList(data) {
+    const container = document.getElementById('restaurantsList');
+    if (!container) return;
+
+    if (data.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 40px;">Chưa có nhà hàng nào</p>';
+        return;
+    }
+
+    container.innerHTML = data.map(r => `
+        <div class="restaurant-row" style="display: flex; gap: 20px; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <div class="res-img" style="width: 120px; height: 120px; background: #eee; border-radius: 8px; overflow: hidden;">
+                <img src="${getImageUrl(r.restaurant_image)}" style="width:100%; height:100%; object-fit: cover;" onerror="this.src='https://via.placeholder.com/150'">
+            </div>
+            <div class="res-info" style="flex: 1;">
+                <h2>${r.restaurant_name || r.username}</h2>
+                <p>${r.restaurant_description || 'Không có mô tả'}</p>
+                <p>📍 ${r.city || 'Hồ Chí Minh'}</p>
+                <button class="btn btn-primary" onclick="viewRestaurant(${r.id})">Xem thực đơn</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.viewRestaurant = async function(restaurantId) {
+    showLoading(true);
+    try {
+        const restaurant = await fetchAPI(`${API.USER}/restaurants/${restaurantId}`);
+        const products = await fetchAPI(`${API.PRODUCT}/products/restaurant/${restaurantId}`);
+
+        const header = document.getElementById('restaurantHeader');
+        if (header) {
+            header.innerHTML = `
+                <h1>${restaurant.restaurant_name || 'Restaurant'}</h1>
+                <p>${restaurant.restaurant_description || 'Welcome!'}</p>
+            `;
         }
 
-        // Handle browser back/forward
-        window.addEventListener('popstate', (e) => {
-            if (e.state && e.state.page) {
-                navigateTo(e.state.page);
-            }
-        });
-
-        // Popular Dishes
-        async function loadPopularDishes() {
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.PRODUCT}/products?limit=6`);
-                const products = await response.json();
-                
-                const container = document.getElementById('popularDishes');
-                container.innerHTML = products.map(product => `
-                    <div class="card" onclick="viewRestaurantMenu(${product.restaurant_id})">
-                        <div class="card-image"></div>
-                        <div class="card-body">
-                            <h3 class="card-title">${product.name}</h3>
-                            <p class="card-text">${product.description || 'Món ăn ngon'}</p>
-                            <p class="card-price">${formatCurrency(product.price)}</p>
-                            <p style="color: #666; font-size: 0.9rem;">⏱️ ${product.preparation_time} phút</p>
-                        </div>
+        const list = document.getElementById('productsList');
+        if (list) {
+            list.innerHTML = products.map(p => `
+                <div class="product-card" style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="height: 150px; background: #f8f9fa; overflow: hidden;">
+                        <img src="${getImageUrl(p.image_url)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='https://via.placeholder.com/150'">
                     </div>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading popular dishes:', error);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Restaurants
-        async function loadRestaurants() {
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.USER}/restaurants`);
-                const restaurants = await response.json();
-                
-                const container = document.getElementById('restaurantsList');
-                container.innerHTML = restaurants.map(restaurant => `
-                    <div class="card" onclick="viewRestaurantMenu(${restaurant.id})">
-                        <div class="card-image"></div>
-                        <div class="card-body">
-                            <h3 class="card-title">${restaurant.restaurant_name || restaurant.username}</h3>
-                            <p class="card-text">${restaurant.restaurant_description || 'Nhà hàng chất lượng'}</p>
-                            <button class="btn btn-primary btn-block" onclick="event.stopPropagation(); viewRestaurantMenu(${restaurant.id})">
-                                Xem thực đơn
+                    <div style="padding: 15px;">
+                        <h3>${p.name}</h3>
+                        <p style="color: #666; font-size: 13px;">${p.description || ''}</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                            <span style="font-weight: bold; color: #FF6B6B;">${formatCurrency(p.price)}</span>
+                            <button class="btn btn-sm btn-outline" onclick="addToCart(${p.id}, '${p.name}', ${p.price}, ${restaurantId})">
+                                + Thêm
                             </button>
                         </div>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading restaurants:', error);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function viewRestaurantMenu(restaurantId) {
-            showLoading(true);
-            try {
-                // Get restaurant info
-                const resResponse = await fetch(`${API.USER}/users/${restaurantId}`);
-                const restaurant = await resResponse.json();
-                currentRestaurant = restaurant;
-                
-                document.getElementById('restaurantTitle').textContent = restaurant.restaurant_name || restaurant.username;
-                
-                // Get products
-                const prodResponse = await fetch(`${API.PRODUCT}/products?restaurant_id=${restaurantId}`);
-                const products = await prodResponse.json();
-                
-                const container = document.getElementById('menuList');
-                container.innerHTML = products.map(product => `
-                    <div class="card">
-                        <div class="card-image"></div>
-                        <div class="card-body">
-                            <h3 class="card-title">${product.name}</h3>
-                            <p class="card-text">${product.description || 'Món ăn ngon'}</p>
-                            <p class="card-price">${formatCurrency(product.price)}</p>
-                            <p style="color: #666; font-size: 0.9rem;">⏱️ ${product.preparation_time} phút</p>
-                            <button onclick="addToCart(${product.id}, '${product.name}', ${product.price})" 
-                                    class="btn btn-primary btn-block"
-                                    ${!product.is_available ? 'disabled' : ''}>
-                                ${product.is_available ? '+ Thêm vào giỏ' : 'Hết hàng'}
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-                
-                navigateTo('menu');
-            } catch (error) {
-                showAlert('Không thể tải thực đơn', 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Cart Functions
-        function addToCart(productId, productName, price) {
-            if (!currentUser) {
-                showAlert('Vui lòng đăng nhập để đặt hàng', 'error');
-                navigateTo('login');
-                return;
-            }
-            
-            const existingItem = cart.find(item => item.product_id === productId);
-            
-            if (existingItem) {
-                existingItem.quantity += 1;
-            } else {
-                cart.push({
-                    product_id: productId,
-                    product_name: productName,
-                    price: price,
-                    quantity: 1
-                });
-            }
-            
-            updateCart();
-            showAlert(`Đã thêm ${productName} vào giỏ hàng`, 'success');
-        }
-
-        function updateCart() {
-            const cartItems = document.getElementById('cartItems');
-            const cartTotal = document.getElementById('cartTotal');
-            const cartCount = document.getElementById('cartCount');
-            
-            if (cart.length === 0) {
-                cartItems.innerHTML = '<p style="text-align: center; color: #666;">Giỏ hàng trống</p>';
-                cartTotal.textContent = '0đ';
-                cartCount.textContent = '0';
-                return;
-            }
-            
-            cartItems.innerHTML = cart.map(item => `
-                <div class="cart-item">
-                    <div>
-                        <strong>${item.product_name}</strong><br>
-                        <small>${formatCurrency(item.price)} x ${item.quantity}</small>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <button onclick="updateCartQuantity(${item.product_id}, -1)" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">-</button>
-                        <span>${item.quantity}</span>
-                        <button onclick="updateCartQuantity(${item.product_id}, 1)" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">+</button>
-                        <button onclick="removeFromCart(${item.product_id})" class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.5rem;">×</button>
                     </div>
                 </div>
             `).join('');
-            
-            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            cartTotal.textContent = formatCurrency(total);
-            cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
         }
 
-        function updateCartQuantity(productId, change) {
-            const item = cart.find(item => item.product_id === productId);
-            if (item) {
-                item.quantity += change;
-                if (item.quantity <= 0) {
-                    removeFromCart(productId);
-                } else {
-                    updateCart();
-                }
-            }
-        }
+        navigateTo('restaurantDetailPage');
+    } catch (error) {
+        showToast('❌ Không thể tải: ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
 
-        function removeFromCart(productId) {
-            cart = cart.filter(item => item.product_id !== productId);
-            updateCart();
-        }
+// ============================================
+// 7. CART & CHECKOUT (ĐÃ SỬA)
+// ============================================
 
-        function toggleCart() {
-            const cartSidebar = document.getElementById('cartSidebar');
-            cartSidebar.classList.toggle('active');
-        }
+window.addToCart = function(id, name, price, resId) {
+    if (!currentUser) {
+        showToast('⚠️ Vui lòng đăng nhập để đặt món', 'warning');
+        navigateTo('login');
+        return;
+    }
 
-        async function checkout() {
-            if (cart.length === 0) {
-                showAlert('Giỏ hàng trống', 'error');
-                return;
-            }
-            
-            if (!currentRestaurant) {
-                showAlert('Vui lòng chọn nhà hàng', 'error');
-                return;
-            }
-            
-            const deliveryAddress = prompt('Nhập địa chỉ giao hàng:', currentUser.address || '');
-            if (!deliveryAddress) return;
-            
-            showLoading(true);
-            
-            try {
-                // Create order
-                const orderData = {
-                    restaurant_id: currentRestaurant.id,
-                    delivery_address: deliveryAddress,
-                    items: cart
-                };
-                
-                const orderResponse = await fetch(`${API.ORDER}/orders`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(orderData)
-                });
-                
-                if (!orderResponse.ok) throw new Error('Không thể tạo đơn hàng');
-                
-                const order = await orderResponse.json();
-                
-                // Create payment
-                const paymentData = {
-                    order_id: order.id,
-                    amount: order.total_amount,
-                    payment_method: 'credit_card'
-                };
-                
-                const paymentResponse = await fetch(`${API.PAYMENT}/payments`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(paymentData)
-                });
-                
-                if (!paymentResponse.ok) throw new Error('Thanh toán thất bại');
-                
-                // Clear cart
-                cart = [];
-                updateCart();
-                toggleCart();
-                
-                showAlert('Đặt hàng thành công! Drone đang trên đường đến bạn 🚁', 'success');
-                navigateTo('orders');
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
+    // Check nhà hàng
+    if(cart.length > 0 && cart[0].restaurant_id !== resId) {
+        if(!confirm("Bạn đang chọn món của nhà hàng khác. Tạo giỏ hàng mới?")) return;
+        cart = [];
+    }
 
-        // Orders
-        async function loadOrders() {
-            if (!currentUser) {
-                showAlert('Vui lòng đăng nhập', 'error');
-                navigateTo('login');
-                return;
-            }
-            
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.ORDER}/orders`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (!response.ok) throw new Error('Không thể tải đơn hàng');
-                
-                const orders = await response.json();
-                
-                const container = document.getElementById('ordersList');
-                
-                if (orders.length === 0) {
-                    container.innerHTML = '<div style="background: white; padding: 2rem; border-radius: 15px; text-align: center;">Chưa có đơn hàng nào</div>';
-                    return;
-                }
-                
-                container.innerHTML = orders.map(order => `
-                    <div style="background: white; padding: 1.5rem; border-radius: 15px; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #f0f0f0;">
-                            <div>
-                                <strong>Đơn hàng #${order.id}</strong><br>
-                                <small>${new Date(order.created_at).toLocaleString('vi-VN')}</small>
-                            </div>
-                            <span style="padding: 0.5rem 1rem; border-radius: 20px; background: ${getStatusColor(order.status)}; color: white; font-weight: 600;">
-                                ${getStatusText(order.status)}
-                            </span>
+    const existing = cart.find(item => item.product_id === id);
+    if (existing) {
+        existing.quantity++;
+    } else {
+        cart.push({
+            product_id: id,
+            product_name: name,
+            price: price,
+            quantity: 1,
+            restaurant_id: resId
+        });
+    }
+    
+    saveCart(); // [FIX] Lưu ngay
+    showToast(`✅ Đã thêm ${name}`, 'success');
+}
+
+window.updateQuantity = function(index, delta) {
+    cart[index].quantity += delta;
+    if (cart[index].quantity <= 0) {
+        cart.splice(index, 1);
+    }
+    saveCart(); // [FIX] Lưu ngay
+    renderCart();
+}
+
+function renderCart() {
+    const body = document.getElementById('cartBody');
+    const totalEl = document.getElementById('cartTotal');
+    
+    if (cart.length === 0) {
+        body.innerHTML = '<p class="text-center">Giỏ hàng trống</p>';
+        totalEl.innerText = '0đ';
+        return;
+    }
+
+    let total = 0;
+    body.innerHTML = cart.map((item, index) => {
+        total += item.price * item.quantity;
+        return `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <div>
+                    <b>${item.product_name}</b><br>
+                    <small>${formatCurrency(item.price)} x ${item.quantity}</small>
+                </div>
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <button class="btn btn-sm" onclick="updateQuantity(${index}, -1)">−</button>
+                    <span>${item.quantity}</span>
+                    <button class="btn btn-sm" onclick="updateQuantity(${index}, 1)">+</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    totalEl.innerText = formatCurrency(total);
+}
+
+// [FIX] Hàm chuyển sang trang thanh toán (Thay vì prompt)
+window.proceedToCheckout = function() {
+    if (cart.length === 0) {
+        showToast('⚠️ Giỏ hàng trống', 'warning');
+        return;
+    }
+    closeCart();
+    navigateTo('checkoutPage');
+}
+
+// [FIX] Hàm load dữ liệu vào trang Checkout
+function loadCheckoutPage() {
+    // Fill User info
+    if(currentUser) {
+        const nameInput = document.getElementById('checkoutName');
+        const phoneInput = document.getElementById('checkoutPhone');
+        const addrInput = document.getElementById('checkoutAddress');
+        if(nameInput) nameInput.value = currentUser.full_name || currentUser.username;
+        if(phoneInput) phoneInput.value = currentUser.phone || '';
+        if(addrInput) addrInput.value = currentUser.address || '';
+    }
+
+    // Render Items
+    const itemsContainer = document.getElementById('checkoutItems');
+    const totalEl = document.getElementById('checkoutTotal');
+    
+    if(itemsContainer) {
+        let total = 0;
+        itemsContainer.innerHTML = cart.map(item => {
+            total += item.price * item.quantity;
+            return `
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${item.quantity}x ${item.product_name}</span>
+                    <span>${formatCurrency(item.price * item.quantity)}</span>
+                </div>
+            `;
+        }).join('');
+        if(totalEl) totalEl.innerText = formatCurrency(total);
+    }
+}
+
+// [FIX] Hàm Xử lý thanh toán mới (Gửi sang Order và Payment)
+window.handleConfirmPayment = async function(event) {
+    event.preventDefault();
+    
+    const address = document.getElementById('checkoutAddress').value;
+    const phone = document.getElementById('checkoutPhone').value;
+    // Radio input
+    const paymentMethodEl = document.querySelector('input[name="paymentMethod"]:checked');
+    const paymentMethod = paymentMethodEl ? paymentMethodEl.value : 'cod';
+
+    if (!address || !phone) {
+        showToast('⚠️ Vui lòng nhập địa chỉ và SĐT', 'warning');
+        return;
+    }
+
+    showLoading(true);
+    try {
+        const restaurantId = cart[0].restaurant_id;
+        const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+        // 1. Tạo Order
+        const orderData = {
+            restaurant_id: restaurantId,
+            delivery_address: address,
+            items: cart.map(i => ({
+                product_id: i.product_id,
+                product_name: i.product_name,
+                quantity: i.quantity,
+                price: i.price
+            }))
+        };
+
+        const orderResponse = await fetchAPI(`${API.ORDER}/orders`, {
+            method: 'POST',
+            body: JSON.stringify(orderData)
+        });
+
+        // 2. Tạo Payment
+        await fetchAPI(`${API.PAYMENT}/payments`, {
+            method: 'POST',
+            body: JSON.stringify({
+                order_id: orderResponse.id,
+                amount: totalAmount,
+                payment_method: paymentMethod
+            })
+        });
+
+        // 3. Thành công
+        showToast('✅ Đặt hàng thành công!', 'success');
+        cart = [];
+        saveCart(); // Xóa trong storage
+        navigateTo('orders');
+
+    } catch (error) {
+        showToast('❌ Lỗi đặt hàng: ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ============================================
+// 8. ORDERS & DASHBOARD
+// ============================================
+
+// ... (loadOrders giữ nguyên) ...
+
+// [FIX] Hàm load Dashboard cho Nhà hàng (Hiển thị món ăn)
+async function loadRestaurantData() {
+    if (!currentUser || currentUser.role !== 'restaurant') return;
+    
+    console.log('Loading restaurant dashboard...');
+    const container = document.getElementById('restaurantProductsList');
+    const infoContainer = document.getElementById('restaurantInfoForm');
+    
+    // 1. Hiển thị thông tin nhà hàng
+    if (infoContainer) {
+        infoContainer.innerHTML = `
+            <div class="card" style="padding:20px; background:white;">
+                <h3>${currentUser.restaurant_name || 'Chưa đặt tên nhà hàng'}</h3>
+                <p>${currentUser.restaurant_description || ''}</p>
+            </div>
+        `;
+    }
+
+    // 2. Load danh sách món ăn của chính nhà hàng này
+    try {
+        // Giả sử API Product hỗ trợ lấy theo restaurant_id. 
+        // Vì User ID chính là Restaurant ID trong logic của bạn
+        const products = await fetchAPI(`${API.PRODUCT}/products/restaurant/${currentUser.id}`);
+        
+        if (container) {
+            if (products.length === 0) {
+                container.innerHTML = '<p>Chưa có món ăn nào. Hãy thêm món mới!</p>';
+            } else {
+                container.innerHTML = `
+                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:20px;">
+                    ${products.map(p => `
+                        <div class="product-card" style="border:1px solid #eee; padding:10px; border-radius:8px;">
+                            <img src="${getImageUrl(p.image_url)}" style="width:100%; height:120px; object-fit:cover;">
+                            <h4>${p.name}</h4>
+                            <p>${formatCurrency(p.price)}</p>
+                            <p style="color:green;">${p.is_available ? 'Đang bán' : 'Hết hàng'}</p>
                         </div>
-                        <div>
-                            ${order.items.map(item => `
-                                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
-                                    <span>${item.product_name} x${item.quantity}</span>
-                                    <span>${formatCurrency(item.price * item.quantity)}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid #f0f0f0;">
-                            <strong>Địa chỉ:</strong> ${order.delivery_address}<br>
-                            <strong>Tổng tiền:</strong> ${formatCurrency(order.total_amount)}<br>
-                            ${order.drone_id ? `<strong>Drone:</strong> #${order.drone_id} 🚁` : ''}
-                            ${order.estimated_delivery_time ? `<br><strong>Thời gian giao:</strong> ~${order.estimated_delivery_time} phút` : ''}
-                        </div>
-                    </div>
-                `).join('');
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Admin Functions
-        async function loadAdminData() {
-            showLoading(true);
-            try {
-                // Load stats
-                const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
-                    fetch(`${API.USER}/users/me`, { headers: { 'Authorization': `Bearer ${token}` }}),
-                    fetch(`${API.USER}/restaurants`),
-                    fetch(`${API.ORDER}/orders`, { headers: { 'Authorization': `Bearer ${token}` }}),
-                    fetch(`${API.ORDER}/drones`)
-                ]);
-                
-                const restaurants = await restaurantsRes.json();
-                const orders = await ordersRes.json();
-                const drones = await dronesRes.json();
-                
-                document.getElementById('totalUsers').textContent = '10+';
-                document.getElementById('totalRestaurants').textContent = restaurants.length;
-                document.getElementById('totalOrders').textContent = orders.length;
-                document.getElementById('totalDrones').textContent = drones.length;
-                
-                // Load restaurants table
-                const resTable = document.getElementById('adminRestaurantsList');
-                resTable.innerHTML = restaurants.map(r => `
-                    <tr>
-                        <td>${r.id}</td>
-                        <td>${r.restaurant_name || 'N/A'}</td>
-                        <td>${r.email}</td>
-                        <td>${r.username}</td>
-                        <td>
-                            <button class="btn btn-outline" style="padding: 0.25rem 0.75rem;" onclick="viewRestaurantProducts(${r.id})">Xem món</button>
-                            <button class="btn" style="background: var(--danger); color: white; padding: 0.25rem 0.75rem;" onclick="deleteUser(${r.id})">Xóa</button>
-                        </td>
-                    </tr>
-                `).join('');
-                
-                // Load drones
-                const dronesContainer = document.getElementById('adminDronesList');
-                dronesContainer.innerHTML = drones.map(drone => `
-                    <div class="card">
-                        <div class="card-image" style="background: linear-gradient(135deg, #667eea, #764ba2);"></div>
-                        <div class="card-body">
-                            <h3 class="card-title">${drone.name}</h3>
-                            <p class="card-text">Model: ${drone.model || 'N/A'}</p>
-                            <p class="card-text">🔋 Pin: ${drone.battery_level.toFixed(1)}%</p>
-                            <p class="card-text">📦 Tải trọng: ${drone.max_payload} kg</p>
-                            <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: ${getDroneStatusColor(drone.status)}; color: white; font-size: 0.85rem;">
-                                ${getDroneStatusText(drone.status)}
-                            </span>
-                        </div>
-                    </div>
-                `).join('');
-                
-                // Load users (mock data since we don't have endpoint)
-                const usersTable = document.getElementById('adminUsersList');
-                usersTable.innerHTML = '<tr><td colspan="5" style="text-align: center;">Đang tải...</td></tr>';
-                
-            } catch (error) {
-                console.error('Error loading admin data:', error);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function viewRestaurantProducts(restaurantId) {
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.PRODUCT}/products?restaurant_id=${restaurantId}`);
-                const products = await response.json();
-                
-                const modal = document.createElement('div');
-                modal.className = 'modal active';
-                modal.innerHTML = `
-                    <div class="modal-content">
-                        <h3>Danh sách món ăn</h3>
-                        <div style="max-height: 400px; overflow-y: auto;">
-                            ${products.map(p => `
-                                <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0;">
-                                    <strong>${p.name}</strong><br>
-                                    <small>${p.description || ''}</small><br>
-                                    <strong style="color: var(--success);">${formatCurrency(p.price)}</strong>
-                                </div>
-                            `).join('') || '<p>Chưa có món ăn nào</p>'}
-                        </div>
-                        <button class="btn btn-outline btn-block" onclick="this.parentElement.parentElement.remove()">Đóng</button>
+                    `).join('')}
                     </div>
                 `;
-                document.body.appendChild(modal);
-            } catch (error) {
-                showAlert('Không thể tải danh sách món', 'error');
-            } finally {
-                showLoading(false);
             }
         }
+    } catch (e) {
+        console.error(e);
+        if(container) container.innerHTML = '<p>Lỗi tải món ăn</p>';
+    }
+}
 
-        // Restaurant Functions
-        async function loadRestaurantData() {
-            showLoading(true);
-            try {
-                // Load products
-                const prodResponse = await fetch(`${API.PRODUCT}/products?restaurant_id=${currentUser.id}`);
-                const products = await prodResponse.json();
-                
-                const container = document.getElementById('restaurantProducts');
-                container.innerHTML = products.map(product => `
-                    <div class="card">
-                        <div class="card-image"></div>
-                        <div class="card-body">
-                            <h3 class="card-title">${product.name}</h3>
-                            <p class="card-text">${product.description || ''}</p>
-                            <p class="card-price">${formatCurrency(product.price)}</p>
-                            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                                <button class="btn btn-outline" style="flex: 1;" onclick="editProduct(${product.id})">Sửa</button>
-                                <button class="btn" style="flex: 1; background: var(--danger); color: white;" onclick="deleteProduct(${product.id})">Xóa</button>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-                
-                if (products.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: white;">Chưa có món ăn nào. Hãy thêm món mới!</p>';
-                }
-                
-                // Load orders
-                const ordersResponse = await fetch(`${API.ORDER}/orders`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const orders = await ordersResponse.json();
-                
-                const ordersContainer = document.getElementById('restaurantOrders');
-                ordersContainer.innerHTML = orders.map(order => `
-                    <div style="background: white; padding: 1.5rem; border-radius: 15px; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                            <div>
-                                <strong>Đơn hàng #${order.id}</strong><br>
-                                <small>${new Date(order.created_at).toLocaleString('vi-VN')}</small>
-                            </div>
-                            <span style="padding: 0.5rem 1rem; border-radius: 20px; background: ${getStatusColor(order.status)}; color: white;">
-                                ${getStatusText(order.status)}
-                            </span>
-                        </div>
-                        <div>
-                            ${order.items.map(item => `<div>${item.product_name} x${item.quantity}</div>`).join('')}
-                        </div>
-                        <div style="margin-top: 1rem; font-weight: bold;">
-                            Tổng: ${formatCurrency(order.total_amount)}
-                        </div>
-                        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="updateOrderStatus(${order.id}, '${getNextStatus(order.status)}')">
-                            Cập nhật trạng thái
-                        </button>
-                    </div>
-                `).join('') || '<p style="text-align: center;">Chưa có đơn hàng nào</p>';
-                
-            } catch (error) {
-                console.error('Error loading restaurant data:', error);
-            } finally {
-                showLoading(false);
-            }
+// [FIX] Hàm submit thêm món ăn (Có upload ảnh)
+async function handleProductSubmit(event) {
+    event.preventDefault();
+
+    // Lấy dữ liệu
+    const name = document.getElementById('prodName').value;
+    const desc = document.getElementById('prodDesc').value;
+    const price = document.getElementById('prodPrice').value;
+    const time = document.getElementById('prodTime').value;
+    const category = document.getElementById('prodCategory').value;
+    // [FIX] Lấy file ảnh (cần thêm input id="prodImage" vào HTML modal nếu chưa có)
+    const imageInput = document.getElementById('prodImage'); 
+
+    if (!currentUser || currentUser.role !== 'restaurant') {
+        showToast('❌ Lỗi quyền hạn', 'error');
+        return;
+    }
+
+    // Tạo FormData
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', desc);
+    formData.append('price', price);
+    formData.append('preparation_time', time);
+    formData.append('category', category);
+    formData.append('restaurant_id', currentUser.id); // ID user là ID nhà hàng
+
+    if (imageInput && imageInput.files[0]) {
+        formData.append('image', imageInput.files[0]);
+    }
+
+    showLoading(true);
+    try {
+        const response = await fetch(`${API.PRODUCT}/products`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+                // Không set Content-Type, để browser tự set boundary
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err);
         }
 
-        async function updateOrderStatus(orderId, newStatus) {
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.ORDER}/orders/${orderId}/status`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ status: newStatus })
-                });
-                
-                if (!response.ok) throw new Error('Không thể cập nhật');
-                
-                showAlert('Đã cập nhật trạng thái đơn hàng', 'success');
-                loadRestaurantData();
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
+        showToast('✅ Thêm món thành công!', 'success');
+        closeModal('addProductModal');
+        document.getElementById('productForm').reset();
+        
+        loadRestaurantData(); // Reload lại list
 
-        // Modal Functions
-        function showAddRestaurantModal() {
-            document.getElementById('addRestaurantModal').classList.add('active');
-        }
+    } catch (error) {
+        console.error(error);
+        showToast('❌ Lỗi: ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
 
-        function showAddProductModal() {
-            document.getElementById('addProductModal').classList.add('active');
-        }
+// Utility Functions
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.style.display = show ? 'flex' : 'none';
+}
 
-        function showAddDroneModal() {
-            document.getElementById('addDroneModal').classList.add('active');
-        }
+function showToast(msg, type) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.style.background = type === 'success' ? '#4caf50' : '#f44336';
+    toast.style.color = 'white';
+    toast.style.padding = '12px 20px';
+    toast.style.marginTop = '10px';
+    toast.style.borderRadius = '5px';
+    toast.innerText = msg;
+    
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
+function formatCurrency(val) {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+}
 
-        async function handleAddRestaurant(e) {
-            e.preventDefault();
-            showLoading(true);
-            
-            const data = {
-                email: document.getElementById('resEmail').value,
-                username: document.getElementById('resUsername').value,
-                password: document.getElementById('resPassword').value,
-                restaurant_name: document.getElementById('resName').value,
-                restaurant_description: document.getElementById('resDesc').value,
-                role: 'restaurant'
-            };
-            
-            try {
-                const response = await fetch(`${API.USER}/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                if (!response.ok) throw new Error('Không thể thêm nhà hàng');
-                
-                showAlert('Đã thêm nhà hàng thành công', 'success');
-                closeModal('addRestaurantModal');
-                loadAdminData();
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function handleAddProduct(e) {
-            e.preventDefault();
-            showLoading(true);
-            
-            const data = {
-                restaurant_id: currentUser.id,
-                name: document.getElementById('prodName').value,
-                description: document.getElementById('prodDesc').value,
-                price: parseFloat(document.getElementById('prodPrice').value),
-                category: document.getElementById('prodCategory').value,
-                preparation_time: parseInt(document.getElementById('prodTime').value)
-            };
-            
-            try {
-                const response = await fetch(`${API.PRODUCT}/products`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                if (!response.ok) throw new Error('Không thể thêm món');
-                
-                showAlert('Đã thêm món ăn thành công', 'success');
-                closeModal('addProductModal');
-                loadRestaurantData();
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function handleAddDrone(e) {
-            e.preventDefault();
-            showLoading(true);
-            
-            const data = {
-                name: document.getElementById('droneName').value,
-                model: document.getElementById('droneModel').value,
-                max_payload: parseFloat(document.getElementById('dronePayload').value)
-            };
-            
-            try {
-                const response = await fetch(`${API.ORDER}/drones`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                if (!response.ok) throw new Error('Không thể thêm drone');
-                
-                showAlert('Đã thêm drone thành công', 'success');
-                closeModal('addDroneModal');
-                loadAdminData();
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function deleteProduct(productId) {
-            if (!confirm('Bạn có chắc muốn xóa món này?')) return;
-            
-            showLoading(true);
-            try {
-                const response = await fetch(`${API.PRODUCT}/products/${productId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (!response.ok) throw new Error('Không thể xóa');
-                
-                showAlert('Đã xóa món ăn', 'success');
-                loadRestaurantData();
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Utility Functions
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('active', show);
-        }
-
-        function showAlert(message, type) {
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            document.body.appendChild(alert);
-            
-            setTimeout(() => alert.remove(), 3000);
-        }
-
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('vi-VN', {
-                style: 'currency',
-                currency: 'VND'
-            }).format(amount);
-        }
-
-        function getStatusText(status) {
-            const map = {
-                'pending': 'Chờ xác nhận',
-                'confirmed': 'Đã xác nhận',
-                'preparing': 'Đang chuẩn bị',
-                'ready': 'Sẵn sàng',
-                'in_delivery': 'Đang giao',
-                'delivered': 'Đã giao',
-                'cancelled': 'Đã hủy'
-            };
-            return map[status] || status;
-        }
-
-        function getStatusColor(status) {
-            const map = {
-                'pending': '#ffc107',
-                'confirmed': '#2196f3',
-                'preparing': '#ff5722',
-                'ready': '#4caf50',
-                'in_delivery': '#9c27b0',
-                'delivered': '#4caf50',
-                'cancelled': '#f44336'
-            };
-            return map[status] || '#666';
-        }
-
-        function getNextStatus(currentStatus) {
-            const sequence = ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered'];
-            const currentIndex = sequence.indexOf(currentStatus);
-            return sequence[currentIndex + 1] || currentStatus;
-        }
-
-        function getDroneStatusText(status) {
-            const map = {
-                'idle': 'Sẵn sàng',
-                'in_use': 'Đang giao hàng',
-                'maintenance': 'Bảo trì'
-            };
-            return map[status] || status;
-        }
-
-        function getDroneStatusColor(status) {
-            const map = {
-                'idle': '#4caf50',
-                'in_use': '#ff9800',
-                'maintenance': '#f44336'
-            };
-            return map[status] || '#666';
-        }
+window.showModal = (id) => document.getElementById(id).style.display = 'block';
+window.closeModal = (id) => document.getElementById(id).style.display = 'none';
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = "none";
+    }
+}
