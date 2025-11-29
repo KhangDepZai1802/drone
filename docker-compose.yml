@@ -2,46 +2,36 @@ version: '3.8'
 
 services:
   # ==========================================
-  # SHARED DATABASE (Single Instance)
+  # DATABASE (SQL SERVER)
   # ==========================================
   shared_db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: shared_db
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=Khangle18
+      - SA_PASSWORD=Khangle123456
       - MSSQL_PID=Developer
     ports:
-      - "1433:1433"
+      - "1444:1433"
     volumes:
       - mssql_data:/var/opt/mssql
     networks:
       - drone_network
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -Q "SELECT 1" -C || exit 1
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle123456 -Q "SELECT 1" -C || exit 1
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-    # Script khởi tạo 4 Database riêng biệt
     command: >
       bash -c "
       /opt/mssql/bin/sqlservr &
       echo 'Waiting for SQL Server to start...' &&
       sleep 30 &&
-      echo '--- Initializing UserDB ---' &&
-      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"UserDB\") BEGIN CREATE DATABASE UserDB; END' &&
-      
-      echo '--- Initializing ProductDB ---' &&
-      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"ProductDB\") BEGIN CREATE DATABASE ProductDB; END' &&
-      
-      echo '--- Initializing OrderDB ---' &&
-      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"OrderDB\") BEGIN CREATE DATABASE OrderDB; END' &&
-      
-      echo '--- Initializing PaymentDB ---' &&
-      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle18 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"PaymentDB\") BEGIN CREATE DATABASE PaymentDB; END' &&
-      
-      echo 'All Databases initialized successfully' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle123456 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"UserDB\") BEGIN CREATE DATABASE UserDB; END' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle123456 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"ProductDB\") BEGIN CREATE DATABASE ProductDB; END' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle123456 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"OrderDB\") BEGIN CREATE DATABASE OrderDB; END' &&
+      /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Khangle123456 -C -Q 'IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = \"PaymentDB\") BEGIN CREATE DATABASE PaymentDB; END' &&
       wait
       "
 
@@ -52,110 +42,86 @@ services:
     build: ./user_service
     container_name: user_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/UserDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
-      - JWT_SECRET=secret
-      - JWT_ALGORITHM=HS256
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle123456@shared_db:1433/UserDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - JWT_SECRET=secret_key_drone_project
+    ports:
+      - "8001:8000"
     networks:
       - drone_network
     depends_on:
       shared_db:
         condition: service_healthy
-    restart: unless-stopped
 
   product_service:
     build: ./product_service
     container_name: product_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/ProductDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle123456@shared_db:1433/ProductDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - USER_SERVICE_URL=http://user_service:8000
-      - JWT_SECRET=secret  # <--- QUAN TRỌNG: Để verify token từ User Service
+      - JWT_SECRET=secret_key_drone_project
+    ports:
+      - "8002:8000"
     volumes:
-      - product_images:/app/static/images # <--- QUAN TRỌNG: Giữ ảnh không bị mất
+      - product_images:/app/static/images
     networks:
       - drone_network
     depends_on:
       shared_db:
         condition: service_healthy
-      user_service:
-        condition: service_started
-    restart: unless-stopped
 
   order_service:
     build: ./order_service
     container_name: order_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/OrderDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
-      - USER_SERVICE_URL=http://user_service:8000/api/users
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle123456@shared_db:1433/OrderDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - USER_SERVICE_URL=http://user_service:8000
       - PRODUCT_SERVICE_URL=http://product_service:8000
-      - JWT_SECRET=secret  # <--- QUAN TRỌNG: Sửa lỗi 401
+      - JWT_SECRET=secret_key_drone_project
+    ports:
+      - "8003:8000"
     networks:
       - drone_network
     depends_on:
       shared_db:
         condition: service_healthy
-      user_service:
-        condition: service_started
-      product_service:
-        condition: service_started
-    restart: unless-stopped
 
   payment_service:
     build: ./payment_service
     container_name: payment_service
     environment:
-      - DATABASE_URL=mssql+pyodbc://sa:Khangle18@shared_db:1433/PaymentDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      - DATABASE_URL=mssql+pyodbc://sa:Khangle123456@shared_db:1433/PaymentDB?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
       - USER_SERVICE_URL=http://user_service:8000
       - ORDER_SERVICE_URL=http://order_service:8000
-      - JWT_SECRET=secret  # <--- QUAN TRỌNG
+      - JWT_SECRET=secret_key_drone_project
+    ports:
+      - "8004:8000"
     networks:
       - drone_network
     depends_on:
       shared_db:
         condition: service_healthy
-      user_service:
-        condition: service_started
-      order_service:
-        condition: service_started
-    restart: unless-stopped
 
   # ==========================================
-  # FRONTEND
+  # FRONTEND (ReactJS)
   # ==========================================
   frontend:
     build: ./frontend
     container_name: frontend
-    networks:
-      - drone_network
-    restart: unless-stopped
-
-  # ==========================================
-  # NGINX API GATEWAY
-  # ==========================================
-  nginx:
-    build: ./nginx
-    container_name: nginx_gateway
     ports:
-      - "80:80"
+      - "3000:3000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
     networks:
       - drone_network
-    depends_on:
-      - user_service
-      - product_service
-      - order_service
-      - payment_service
-      - frontend
     restart: unless-stopped
 
 # ==========================================
-# NETWORK
+# GLOBAL CONFIGS
 # ==========================================
 networks:
   drone_network:
     driver: bridge
 
-# ==========================================
-# VOLUMES
-# ==========================================
 volumes:
-  mssql_data:       # Lưu dữ liệu SQL
-  product_images:   # Lưu ảnh món ăn upload lên
+  mssql_data:
+  product_images:

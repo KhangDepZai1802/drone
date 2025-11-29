@@ -15,13 +15,16 @@ import random
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user_service:8000")
+ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://order_service:8000") # [MỚI] Thêm URL Order Service
 
 # Database setup
 engine = create_engine(DATABASE_URL, echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Database Models
+# ==========================================
+# MODELS
+# ==========================================
 class Payment(Base):
     __tablename__ = "payments"
     
@@ -35,7 +38,6 @@ class Payment(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-# Pydantic Models
 class PaymentCreate(BaseModel):
     order_id: int
     amount: float
@@ -58,19 +60,25 @@ class PaymentResponse(BaseModel):
 class PaymentStatusUpdate(BaseModel):
     status: str
 
-# FastAPI app
+# ==========================================
+# APP SETUP
+# ==========================================
 app = FastAPI(title="Payment Service", version="1.0.0")
 
-# CORS
+# Cho phép chính xác địa chỉ Frontend
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins, # <--- ĐÚNG: Chỉ định rõ nguồn
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Database dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -78,12 +86,10 @@ def get_db():
     finally:
         db.close()
 
-# Startup
 @app.on_event("startup")
 async def startup_event():
     max_retries = 30
     retry_count = 0
-    
     while retry_count < max_retries:
         try:
             Base.metadata.create_all(bind=engine)
@@ -94,13 +100,14 @@ async def startup_event():
             print(f"Database connection failed (attempt {retry_count}/{max_retries}): {e}")
             time.sleep(2)
 
-# Auth helper
+# ==========================================
+# HELPERS
+# ==========================================
 async def verify_token(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     token = authorization.split(" ")[1]
-    
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
@@ -111,16 +118,18 @@ async def verify_token(authorization: str = Header(None)):
             if response.status_code == 200:
                 return response.json()
             raise HTTPException(status_code=401, detail="Invalid token")
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="User service unavailable")
+        except HTTPException as e:
+            raise e
         except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+            raise HTTPException(status_code=401, detail="Authentication failed")
 
-# Payment processing simulation
-def process_payment(payment_method: str, amount: float) -> dict:
+def process_payment_simulation(payment_method: str, amount: float) -> dict:
     """Simulate payment processing"""
+    # Trong thực tế sẽ gọi API Stripe/PayPal/Momo ở đây
     time.sleep(0.5)
-    
-    # 95% success rate
-    success = random.random() < 0.95
+    success = random.random() < 0.95 # 95% thành công
     
     if success:
         return {
@@ -135,10 +144,12 @@ def process_payment(payment_method: str, amount: float) -> dict:
             "message": "Payment failed"
         }
 
-# Routes
+# ==========================================
+# ROUTES
+# ==========================================
 @app.get("/")
 async def root():
-    return {"service": "Payment Service", "status": "running", "version": "1.0.0"}
+    return {"service": "Payment Service", "status": "running"}
 
 @app.post("/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment(
@@ -149,12 +160,15 @@ async def create_payment(
     """Create and process payment"""
     user = await verify_token(authorization)
     
-    # Check if payment already exists
+    # Check duplicate
     existing = db.query(Payment).filter(Payment.order_id == payment.order_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Payment already exists for this order")
+        # Nếu thanh toán trước đó thất bại, có thể cho phép thử lại (logic mở rộng)
+        # Ở đây đơn giản là báo lỗi
+        if existing.status == "completed":
+             raise HTTPException(status_code=400, detail="Payment already exists for this order")
     
-    # Create payment record
+    # Tạo record payment
     db_payment = Payment(
         order_id=payment.order_id,
         user_id=user["user_id"],
@@ -162,17 +176,30 @@ async def create_payment(
         payment_method=payment.payment_method,
         status="processing"
     )
-    
     db.add(db_payment)
     db.commit()
     db.refresh(db_payment)
     
-    # Process payment
-    result = process_payment(payment.payment_method, payment.amount)
+    # Xử lý thanh toán (Giả lập)
+    result = process_payment_simulation(payment.payment_method, payment.amount)
     
     if result["success"]:
         db_payment.status = "completed"
         db_payment.transaction_id = result["transaction_id"]
+        
+        # [QUAN TRỌNG] Gọi Order Service để cập nhật trạng thái đơn hàng
+        # Forward token của user để Order Service xác thực quyền sở hữu
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.put(
+                    f"{ORDER_SERVICE_URL}/orders/{payment.order_id}/status",
+                    json={"status": "confirmed"}, # Chuyển sang CONFIRMED
+                    headers={"Authorization": authorization}
+                )
+        except Exception as e:
+            print(f"⚠️ Failed to update order status: {e}")
+            # Có thể cần cơ chế retry hoặc log để xử lý sau
+            
     else:
         db_payment.status = "failed"
     
@@ -188,12 +215,9 @@ async def list_payments(
     order_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """List all payments"""
     user = await verify_token(authorization)
     
     query = db.query(Payment)
-    
-    # Filter by user (unless admin)
     if user["role"] != "admin":
         query = query.filter(Payment.user_id == user["user_id"])
     
@@ -209,12 +233,15 @@ async def get_payment(
     authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
-    """Get payment by ID"""
-    await verify_token(authorization)
-    
+    user = await verify_token(authorization)
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+        
+    # Check quyền xem
+    if user["role"] != "admin" and payment.user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
     
     return payment
 
@@ -224,56 +251,14 @@ async def get_payment_by_order(
     authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
-    """Get payment by order ID"""
-    await verify_token(authorization)
-    
+    user = await verify_token(authorization)
     payment = db.query(Payment).filter(Payment.order_id == order_id).first()
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found for this order")
     
-    return payment
-
-@app.put("/payments/{payment_id}/status", response_model=PaymentResponse)
-async def update_payment_status(
-    payment_id: int,
-    status_update: PaymentStatusUpdate,
-    authorization: str = Header(None),
-    db: Session = Depends(get_db)
-):
-    """Update payment status"""
-    await verify_token(authorization)
-    
-    payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
-    
-    payment.status = status_update.status
-    payment.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(payment)
-    
-    return payment
-
-@app.post("/payments/{payment_id}/refund", response_model=PaymentResponse)
-async def refund_payment(
-    payment_id: int,
-    authorization: str = Header(None),
-    db: Session = Depends(get_db)
-):
-    """Refund payment"""
-    await verify_token(authorization)
-    
-    payment = db.query(Payment).filter(Payment.id == payment_id).first()
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-    
-    if payment.status != "completed":
-        raise HTTPException(status_code=400, detail="Only completed payments can be refunded")
-    
-    payment.status = "refunded"
-    payment.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(payment)
+        
+    if user["role"] != "admin" and payment.user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
     
     return payment
 

@@ -1,12 +1,23 @@
-FROM nginx:alpine
+# Sử dụng Node.js (nhẹ)
+FROM node:18-alpine
 
-# Xóa file mặc định
-RUN rm -rf /usr/share/nginx/html/*
+WORKDIR /app
 
-# Copy 3 file vào container
-COPY index.html /usr/share/nginx/html/index.html
-COPY style.css /usr/share/nginx/html/style.css
-COPY app.js /usr/share/nginx/html/app.js
+# Copy package.json và cài thư viện
+COPY package.json .
+RUN npm install
 
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Copy toàn bộ code vào
+COPY . .
+
+# Build React ra thư mục /dist
+RUN npm run build
+
+# Cài đặt gói 'serve' để chạy web static
+RUN npm install -g serve
+
+# Mở port 3000
+EXPOSE 3000
+
+# Lệnh chạy: serve thư mục 'dist' ở port 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]
