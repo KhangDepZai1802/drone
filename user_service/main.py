@@ -108,11 +108,13 @@ app = FastAPI(title="User Service", version="1.0.0")
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8003",  
+    "http://127.0.0.1:8003",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # <--- ĐÚNG: Chỉ định rõ nguồn
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

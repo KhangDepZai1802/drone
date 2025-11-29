@@ -131,11 +131,13 @@ app = FastAPI(title="Product Service", version="2.0.0")
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8003",  
+    "http://127.0.0.1:8003",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # <--- ĐÚNG: Chỉ định rõ nguồn
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -412,7 +414,13 @@ async def get_restaurant_hours(restaurant_id: int, db: Session = Depends(get_db)
         "message": message,
         "hours": hours
     }
+# --- Thêm đoạn này vào product_service/main.py ---
 
+@app.get("/products/restaurant/{restaurant_id}", response_model=List[ProductResponse])
+async def get_restaurant_products(restaurant_id: int, db: Session = Depends(get_db)):
+    """Lấy danh sách món ăn của một nhà hàng cụ thể"""
+    products = db.query(Product).filter(Product.restaurant_id == restaurant_id).all()
+    return products
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

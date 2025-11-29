@@ -166,11 +166,13 @@ app = FastAPI(title="Order Service", version="2.0.0")
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8003",  
+    "http://127.0.0.1:8003",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # <--- ĐÚNG: Chỉ định rõ nguồn
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -512,6 +514,7 @@ async def charge_drone(drone_id: int, db: Session = Depends(get_db)):
     drone.status = DroneStatus.IDLE
     db.commit()
     return {"message": "Charged"}
+
 
 if __name__ == "__main__":
     import uvicorn

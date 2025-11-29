@@ -1,12 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, LogOut, Zap, ShieldCheck, Plane } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+// --- IMPORT CÁC TRANG TỪ THƯ MỤC PAGES ---
+// (Đảm bảo bạn đã tạo đủ 5 file này trong folder pages)
+import RestaurantDetail from './pages/RestaurantDetail';
+import CartPage from './pages/CartPage';
+import OrdersPage from './pages/OrdersPage';
+import AdminDashboard from './pages/AdminDashboard';
+import RestaurantDashboard from './pages/RestaurantDashboard';
+
+// --- IMPORT API ---
 import { userApi, getImageUrl } from './api';
 
-// --- COMPONENTS CON ---
+// ==========================================
+// CÁC COMPONENT CŨ (Vẫn giữ ở đây vì chưa tách file)
+// ==========================================
 
 const Navbar = ({ user, cartCount, onLogout }) => {
+  const isAdmin = user?.role === 'admin';
+  const isRestaurant = user?.role === 'restaurant';
+  const isCustomer = !isAdmin && !isRestaurant;
+
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -21,28 +38,42 @@ const Navbar = ({ user, cartCount, onLogout }) => {
           </div>
           <div className="flex items-center space-x-6">
             <Link to="/" className="text-gray-600 hover:text-primary font-medium">Trang chủ</Link>
-            <Link to="/restaurants" className="text-gray-600 hover:text-primary font-medium">Nhà hàng</Link>
-            {user && <Link to="/orders" className="text-gray-600 hover:text-primary font-medium">Đơn hàng</Link>}
+            
+            {isCustomer && (
+              <>
+                <Link to="/restaurants" className="text-gray-600 hover:text-primary font-medium">Nhà hàng</Link>
+                {user && <Link to="/orders" className="text-gray-600 hover:text-primary font-medium">Đơn hàng</Link>}
+              </>
+            )}
             
             {user ? (
               <div className="flex items-center gap-4">
-                {user.role === 'admin' && (
-                   <Link to="/admin" className="text-blue-600 font-bold">Admin</Link>
+                {isAdmin && (
+                   <Link to="/admin" className="text-blue-700 font-bold bg-blue-50 px-3 py-1 rounded border border-blue-200">
+                     🛡️ Admin
+                   </Link>
                 )}
-                {user.role === 'restaurant' && (
-                   <Link to="/restaurant-dashboard" className="text-green-600 font-bold">Quản lý Quán</Link>
+                {isRestaurant && (
+                   <Link to="/restaurant-dashboard" className="text-green-700 font-bold bg-green-50 px-3 py-1 rounded border border-green-200">
+                     🏪 Quản lý
+                   </Link>
                 )}
                 
-                <Link to="/cart" className="relative p-2 text-gray-600 hover:text-primary transition">
-                  <ShoppingCart size={24} />
-                  {cartCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                      {cartCount}
-                    </span>
-                  )}
-                </Link>
+                {isCustomer && (
+                  <Link to="/cart" className="relative p-2 text-gray-600 hover:text-primary transition">
+                    <ShoppingCart size={24} />
+                    {cartCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                        {cartCount}
+                      </span>
+                    )}
+                  </Link>
+                )}
+
                 <div className="flex items-center gap-2 border-l pl-4 ml-2">
-                  <span className="text-sm font-semibold">{user.full_name || user.username}</span>
+                  <div className="hidden md:flex flex-col text-right mr-1">
+                    <span className="text-sm font-semibold">{user.full_name || user.username}</span>
+                  </div>
                   <button onClick={onLogout} className="text-gray-400 hover:text-red-500">
                     <LogOut size={20} />
                   </button>
@@ -61,11 +92,8 @@ const Navbar = ({ user, cartCount, onLogout }) => {
   );
 };
 
-// --- PAGES ---
-
 const HomePage = () => (
   <div className="animate-fade-in">
-    {/* Hero */}
     <div className="relative bg-gradient-to-br from-rose-500 to-orange-400 text-white overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 py-24 flex flex-col md:flex-row items-center">
         <div className="md:w-1/2 z-10">
@@ -82,30 +110,19 @@ const HomePage = () => (
         </div>
       </div>
     </div>
-
-    {/* Features */}
     <div className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-10">
         <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Zap size={32} />
-          </div>
-          <h3 className="text-xl font-bold mb-2">Siêu tốc độ</h3>
-          <p className="text-gray-500">Giao hàng đường hàng không, không lo kẹt xe.</p>
+            <Zap size={32} className="mx-auto text-blue-600 mb-4" />
+            <h3 className="text-xl font-bold">Siêu tốc độ</h3>
         </div>
         <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ShieldCheck size={32} />
-          </div>
-          <h3 className="text-xl font-bold mb-2">An toàn tuyệt đối</h3>
-          <p className="text-gray-500">Quy trình khép kín, đảm bảo vệ sinh thực phẩm.</p>
+            <ShieldCheck size={32} className="mx-auto text-green-600 mb-4" />
+            <h3 className="text-xl font-bold">An toàn</h3>
         </div>
         <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-          <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plane size={32} />
-          </div>
-          <h3 className="text-xl font-bold mb-2">Công nghệ cao</h3>
-          <p className="text-gray-500">Theo dõi lộ trình Drone theo thời gian thực.</p>
+            <Plane size={32} className="mx-auto text-purple-600 mb-4" />
+            <h3 className="text-xl font-bold">Công nghệ cao</h3>
         </div>
       </div>
     </div>
@@ -123,8 +140,8 @@ const LoginPage = ({ onLogin }) => {
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
-      
       const res = await userApi.post('/token', formData);
+      
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       
@@ -142,130 +159,46 @@ const LoginPage = ({ onLogin }) => {
   return (
     <div className="min-h-[80vh] flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">Đăng nhập</h2>
+        <h2 className="text-3xl font-bold text-center mb-8">Đăng nhập</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
-            <input 
-              type="text" 
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-              value={username} 
-              onChange={(e) => setUsername(e.target.value)} 
-              required 
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-            <input 
-              type="password" 
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
-            />
-          </div>
-          <button type="submit" className="w-full bg-primary text-white py-3 rounded-lg font-bold text-lg hover:bg-rose-600 transition shadow-lg shadow-rose-200">
-            Đăng nhập
-          </button>
+          <input className="w-full px-4 py-3 rounded-lg border" placeholder="Tên đăng nhập" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <input className="w-full px-4 py-3 rounded-lg border" type="password" placeholder="Mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <button type="submit" className="w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-rose-600 transition">Đăng nhập</button>
         </form>
-        <p className="mt-6 text-center text-gray-600">
-          Chưa có tài khoản? <Link to="/register" className="text-primary font-semibold hover:underline">Đăng ký ngay</Link>
-        </p>
+        <p className="mt-4 text-center"><Link to="/register" className="text-primary">Đăng ký ngay</Link></p>
       </div>
     </div>
   );
 };
 
-// [MỚI] TRANG ĐĂNG KÝ HOÀN CHỈNH
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    email: '',
-    full_name: '',
-    phone: '',
-    address: ''
-  });
-
-  const handleChange = (e) => {
-    setFormData({...formData, [e.target.name]: e.target.value});
-  };
+  const [formData, setFormData] = useState({ username: '', password: '', email: '', full_name: '', phone: '', address: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Gọi API Register (Backend đã sửa để role mặc định là customer)
       await userApi.post('/register', formData);
-      toast.success('Đăng ký thành công! Vui lòng đăng nhập.');
+      toast.success('Đăng ký thành công!');
       navigate('/login');
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Đăng ký thất bại';
-      toast.error(msg);
+      toast.error(err.response?.data?.detail || 'Đăng ký thất bại');
     }
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center bg-gray-100 py-12">
+    <div className="min-h-[80vh] flex items-center justify-center bg-gray-100 py-10">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
-        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">Đăng ký tài khoản</h2>
+        <h2 className="text-3xl font-bold text-center mb-6">Đăng ký</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên</label>
-              <input name="full_name" type="text" required
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-              <input name="phone" type="tel" required
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input name="email" type="email" required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
-            <input name="username" type="text" required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-            <input name="password" type="password" required minLength={6}
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-            <textarea name="address" rows="2"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary outline-none"
-              onChange={handleChange}
-            ></textarea>
-          </div>
-
-          <button type="submit" className="w-full bg-primary text-white py-3 rounded-lg font-bold text-lg hover:bg-rose-600 transition shadow-lg mt-4">
-            Đăng ký ngay
-          </button>
+           <input className="w-full p-2 border rounded" placeholder="Họ tên" onChange={e => setFormData({...formData, full_name: e.target.value})} required />
+           <input className="w-full p-2 border rounded" placeholder="Email" type="email" onChange={e => setFormData({...formData, email: e.target.value})} required />
+           <input className="w-full p-2 border rounded" placeholder="Username" onChange={e => setFormData({...formData, username: e.target.value})} required />
+           <input className="w-full p-2 border rounded" placeholder="Password" type="password" onChange={e => setFormData({...formData, password: e.target.value})} required />
+           <input className="w-full p-2 border rounded" placeholder="SĐT" onChange={e => setFormData({...formData, phone: e.target.value})} required />
+           <textarea className="w-full p-2 border rounded" placeholder="Địa chỉ" onChange={e => setFormData({...formData, address: e.target.value})} required />
+           <button className="w-full bg-primary text-white py-3 rounded font-bold">Đăng ký</button>
         </form>
-        <p className="mt-6 text-center text-gray-600">
-          Đã có tài khoản? <Link to="/login" className="text-primary font-semibold hover:underline">Đăng nhập</Link>
-        </p>
       </div>
     </div>
   );
@@ -276,42 +209,28 @@ const RestaurantsPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRes = async () => {
-      try {
-        const res = await userApi.get('/restaurants');
-        setRestaurants(res.data);
-      } catch (err) {
-        toast.error('Lỗi tải nhà hàng');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRes();
+    userApi.get('/restaurants').then(res => {
+      setRestaurants(res.data);
+      setLoading(false);
+    });
   }, []);
 
-  if (loading) return <div className="p-20 text-center"><div className="animate-spin text-4xl">⏳</div></div>;
+  if (loading) return <div className="p-20 text-center">Loading...</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold mb-8">🍽️ Danh sách Nhà hàng</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {restaurants.map(res => (
           <Link to={`/restaurant/${res.id}`} key={res.id} className="block group">
-            <div className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition duration-300 transform hover:-translate-y-1">
-              <div className="h-48 bg-gray-200 overflow-hidden">
-                <img 
-                  src={getImageUrl(res.restaurant_image)} 
-                  alt={res.restaurant_name} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
-                  onError={(e) => e.target.src = 'https://placehold.co/400x300?text=Restaurant'}
-                />
+            <div className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition">
+              <div className="h-48 overflow-hidden">
+                 <img src={getImageUrl(res.restaurant_image)} className="w-full h-full object-cover" onError={(e) => e.target.src = 'https://placehold.co/400x300'} />
               </div>
-              <div className="p-6">
-                <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition">{res.restaurant_name}</h3>
-                <p className="text-gray-500 text-sm line-clamp-2">{res.restaurant_description}</p>
-                <div className="mt-4 flex items-center text-sm text-gray-400">
-                  <span>📍 {res.city || 'TP.HCM'}</span>
-                </div>
+              <div className="p-4">
+                <h3 className="font-bold text-lg group-hover:text-primary">{res.restaurant_name}</h3>
+                <p className="text-gray-500 text-sm truncate">{res.restaurant_description}</p>
+                <p className="text-xs text-gray-400 mt-2">📍 {res.city || 'TP.HCM'}</p>
               </div>
             </div>
           </Link>
@@ -321,7 +240,9 @@ const RestaurantsPage = () => {
   );
 };
 
-// --- MAIN APP ---
+// ==========================================
+// MAIN APP COMPONENT
+// ==========================================
 
 function App() {
   const [user, setUser] = useState(null);
@@ -330,8 +251,19 @@ function App() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) setUser(JSON.parse(storedUser));
-    const storedCart = localStorage.getItem('drone_cart');
-    if (storedCart) setCart(JSON.parse(storedCart));
+    
+    // Hàm load lại giỏ hàng
+    const loadCart = () => {
+       const storedCart = localStorage.getItem('drone_cart');
+       if (storedCart) setCart(JSON.parse(storedCart));
+    };
+    
+    // Load lần đầu
+    loadCart();
+    
+    // Lắng nghe sự kiện update từ các component khác
+    window.addEventListener('cart-updated', loadCart);
+    return () => window.removeEventListener('cart-updated', loadCart);
   }, []);
 
   const handleLogout = () => {
@@ -343,18 +275,22 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800">
+      <ToastContainer position="top-right" autoClose={3000} />
       <Navbar user={user} cartCount={cart.reduce((a,b) => a+b.quantity, 0)} onLogout={handleLogout} />
       
       <main className="flex-grow">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage onLogin={setUser} />} />
-          <Route path="/register" element={<RegisterPage />} /> {/* Đã thêm trang Register */}
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/restaurants" element={<RestaurantsPage />} />
-          <Route path="/restaurant/:id" element={<div className="p-20 text-center">Trang Chi tiết (Cần làm thêm)</div>} />
-          <Route path="/cart" element={<div className="p-20 text-center">Trang Giỏ hàng (Cần làm thêm)</div>} />
-          <Route path="/admin" element={<div className="p-20 text-center">Admin Dashboard</div>} />
-          <Route path="/restaurant-dashboard" element={<div className="p-20 text-center">Restaurant Dashboard</div>} />
+          
+          {/* CÁC PAGE TỪ FILE RIÊNG */}
+          <Route path="/restaurant/:id" element={<RestaurantDetail />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/restaurant-dashboard" element={<RestaurantDashboard />} />
         </Routes>
       </main>
 

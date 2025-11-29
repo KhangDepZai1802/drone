@@ -102,6 +102,27 @@ services:
         condition: service_healthy
 
   # ==========================================
+  # API GATEWAY (ĐIỂM VÀO DUY NHẤT)
+  # ==========================================
+  api_gateway:
+    build: ./api_gateway
+    container_name: api_gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - USER_SERVICE_URL=http://user_service:8000
+      - PRODUCT_SERVICE_URL=http://product_service:8000
+      - ORDER_SERVICE_URL=http://order_service:8000
+      - PAYMENT_SERVICE_URL=http://payment_service:8000
+    depends_on:
+      - user_service
+      - product_service
+      - order_service
+      - payment_service
+    networks:
+      - drone_network
+
+  # ==========================================
   # FRONTEND (ReactJS)
   # ==========================================
   frontend:
@@ -113,6 +134,8 @@ services:
       - CHOKIDAR_USEPOLLING=true
     networks:
       - drone_network
+    depends_on:
+      - api_gateway
     restart: unless-stopped
 
 # ==========================================
