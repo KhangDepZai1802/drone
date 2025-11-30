@@ -4,21 +4,19 @@ import { ShoppingCart, LogOut, Zap, ShieldCheck, Plane } from 'lucide-react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+// --- IMPORT API (CRITICAL FIX) ---
+import { authApi, userApi, getImageUrl } from './api';
+
 // --- IMPORT CÁC TRANG TỪ THƯ MỤC PAGES ---
-// (Đảm bảo bạn đã tạo đủ 5 file này trong folder pages)
 import RestaurantDetail from './pages/RestaurantDetail';
 import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminDashboard from './pages/AdminDashboard';
 import RestaurantDashboard from './pages/RestaurantDashboard';
 
-// --- IMPORT API ---
-import { userApi, getImageUrl } from './api';
-
 // ==========================================
-// CÁC COMPONENT CŨ (Vẫn giữ ở đây vì chưa tách file)
+// NAVBAR COMPONENT
 // ==========================================
-
 const Navbar = ({ user, cartCount, onLogout }) => {
   const isAdmin = user?.role === 'admin';
   const isRestaurant = user?.role === 'restaurant';
@@ -92,6 +90,9 @@ const Navbar = ({ user, cartCount, onLogout }) => {
   );
 };
 
+// ==========================================
+// HOME PAGE
+// ==========================================
 const HomePage = () => (
   <div className="animate-fade-in">
     <div className="relative bg-gradient-to-br from-rose-500 to-orange-400 text-white overflow-hidden">
@@ -129,31 +130,54 @@ const HomePage = () => (
   </div>
 );
 
+// ==========================================
+// LOGIN PAGE (FIXED)
+// ==========================================
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
+    
+    console.log('🔐 LOGIN ATTEMPT:', { username, password: '***' });
+    
+    if (!username || !password) {
+      toast.error('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
 
+    setLoading(true);
+    try {
+      // ✅ FIX: Gọi đúng authApi.login() từ api.js
+      console.log('📡 Calling authApi.login()...');
       const res = await authApi.login(username, password);
       
+      console.log('✅ Login response:', res.data);
+      
+      // Lưu token và user
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       
       onLogin(res.data.user);
-      toast.success('Đăng nhập thành công!');
+      toast.success('✅ Đăng nhập thành công!');
       
-      if (res.data.user.role === 'admin') navigate('/admin');
-      else if (res.data.user.role === 'restaurant') navigate('/restaurant-dashboard');
-      else navigate('/');
+      // Redirect theo role
+      if (res.data.user.role === 'admin') {
+        navigate('/admin');
+      } else if (res.data.user.role === 'restaurant') {
+        navigate('/restaurant-dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
-      toast.error('Sai tài khoản hoặc mật khẩu');
+      console.error('❌ Login error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Đăng nhập thất bại';
+      toast.error(`❌ ${errorMsg}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -162,28 +186,65 @@ const LoginPage = ({ onLogin }) => {
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
         <h2 className="text-3xl font-bold text-center mb-8">Đăng nhập</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <input className="w-full px-4 py-3 rounded-lg border" placeholder="Tên đăng nhập" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          <input className="w-full px-4 py-3 rounded-lg border" type="password" placeholder="Mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <button type="submit" className="w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-rose-600 transition">Đăng nhập</button>
+          <input 
+            className="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-rose-500 outline-none" 
+            placeholder="Tên đăng nhập" 
+            value={username} 
+            onChange={(e) => setUsername(e.target.value)} 
+            disabled={loading}
+            required 
+          />
+          <input 
+            className="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-rose-500 outline-none" 
+            type="password" 
+            placeholder="Mật khẩu" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
+            disabled={loading}
+            required 
+          />
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-rose-600 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Đang xử lý...' : 'Đăng nhập'}
+          </button>
         </form>
-        <p className="mt-4 text-center"><Link to="/register" className="text-primary">Đăng ký ngay</Link></p>
+        <p className="mt-4 text-center">
+          Chưa có tài khoản? <Link to="/register" className="text-primary font-semibold hover:underline">Đăng ký ngay</Link>
+        </p>
       </div>
     </div>
   );
 };
 
+// ==========================================
+// REGISTER PAGE
+// ==========================================
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ username: '', password: '', email: '', full_name: '', phone: '', address: '' });
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    email: '', 
+    full_name: '', 
+    phone: '', 
+    address: '' 
+  });
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       await userApi.post('/register', formData);
-      toast.success('Đăng ký thành công!');
+      toast.success('✅ Đăng ký thành công! Vui lòng đăng nhập.');
       navigate('/login');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Đăng ký thất bại');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -198,13 +259,22 @@ const RegisterPage = () => {
            <input className="w-full p-2 border rounded" placeholder="Password" type="password" onChange={e => setFormData({...formData, password: e.target.value})} required />
            <input className="w-full p-2 border rounded" placeholder="SĐT" onChange={e => setFormData({...formData, phone: e.target.value})} required />
            <textarea className="w-full p-2 border rounded" placeholder="Địa chỉ" onChange={e => setFormData({...formData, address: e.target.value})} required />
-           <button className="w-full bg-primary text-white py-3 rounded font-bold">Đăng ký</button>
+           <button 
+             type="submit"
+             disabled={loading}
+             className="w-full bg-primary text-white py-3 rounded font-bold hover:bg-rose-600 disabled:bg-gray-300"
+           >
+             {loading ? 'Đang xử lý...' : 'Đăng ký'}
+           </button>
         </form>
       </div>
     </div>
   );
 };
 
+// ==========================================
+// RESTAURANTS PAGE
+// ==========================================
 const RestaurantsPage = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -212,6 +282,9 @@ const RestaurantsPage = () => {
   useEffect(() => {
     userApi.get('/restaurants').then(res => {
       setRestaurants(res.data);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
       setLoading(false);
     });
   }, []);
@@ -244,7 +317,6 @@ const RestaurantsPage = () => {
 // ==========================================
 // MAIN APP COMPONENT
 // ==========================================
-
 function App() {
   const [user, setUser] = useState(null);
   const [cart, setCart] = useState([]);
@@ -253,16 +325,12 @@ function App() {
     const storedUser = localStorage.getItem('user');
     if (storedUser) setUser(JSON.parse(storedUser));
     
-    // Hàm load lại giỏ hàng
     const loadCart = () => {
        const storedCart = localStorage.getItem('drone_cart');
        if (storedCart) setCart(JSON.parse(storedCart));
     };
     
-    // Load lần đầu
     loadCart();
-    
-    // Lắng nghe sự kiện update từ các component khác
     window.addEventListener('cart-updated', loadCart);
     return () => window.removeEventListener('cart-updated', loadCart);
   }, []);
@@ -285,8 +353,6 @@ function App() {
           <Route path="/login" element={<LoginPage onLogin={setUser} />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/restaurants" element={<RestaurantsPage />} />
-          
-          {/* CÁC PAGE TỪ FILE RIÊNG */}
           <Route path="/restaurant/:id" element={<RestaurantDetail />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/orders" element={<OrdersPage />} />

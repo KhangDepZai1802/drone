@@ -1,23 +1,19 @@
-# Sử dụng Node.js (nhẹ)
+# ✅ DEVELOPMENT MODE - Hot reload enabled
 FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package.json và cài thư viện
-COPY package.json .
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
-# Copy toàn bộ code vào
+# Copy all source code
 COPY . .
 
-# Build React ra thư mục /dist
-RUN npm run build
-
-# Cài đặt gói 'serve' để chạy web static
-RUN npm install -g serve
-
-# Mở port 3000
+# Expose port
 EXPOSE 3000
 
-# Lệnh chạy: serve thư mục 'dist' ở port 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# ✅ FIX: Run Vite dev server (NOT serve)
+CMD ["npm", "run", "dev", "--", "--host"]

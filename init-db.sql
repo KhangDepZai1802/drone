@@ -1,7 +1,7 @@
 /* SCRIPT KHỞI TẠO DATABASES VÀ DỮ LIỆU MẪU (REALISTIC DATA)
    HỆ THỐNG: DRONE DELIVERY MICROSERVICES
    Pass mặc định cho tất cả user: 123456
-   Hash: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e
+   Hash: $2b$12$49h7Uk7BWuTkmo/l7PWj0uJrLFVg86SoeT.X.QGEB8hj5GsS2/aVq
 */
 
 USE master;
@@ -26,7 +26,7 @@ CREATE TABLE users (
     full_name NVARCHAR(255),
     phone VARCHAR(20),
     address NVARCHAR(500),
-    role VARCHAR(20) DEFAULT 'customer', -- 'admin', 'restaurant', 'customer'
+    role VARCHAR(20) DEFAULT 'customer',
     is_active INT DEFAULT 1,
     created_at DATETIME DEFAULT GETDATE(),
     -- Fields riêng cho Restaurant
@@ -38,46 +38,40 @@ CREATE TABLE users (
 );
 
 -- SEED DATA: USERS & RESTAURANTS
--- Lưu ý thứ tự Insert để định danh ID cho Product Service
--- ID 1: Admin
--- ID 2-6: Restaurants
--- ID 7+: Customers
-
 INSERT INTO users (username, email, hashed_password, full_name, phone, address, role, restaurant_name, restaurant_description, restaurant_image, city) VALUES 
 -- 1. Admin
-('admin', 'admin@dronefood.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', 'System Administrator', '0909000000', 'HQ DroneFood', 'admin', NULL, NULL, NULL, NULL),
+('admin', 'admin@dronefood.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'System Administrator', '0909000000', 'HQ DroneFood', 'admin', NULL, NULL, NULL, NULL),
 
 -- 2. Restaurant: KFC
-('kfc_vietnam', 'contact@kfc.com.vn', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', 'KFC Manager', '19006886', N'Lê Lai, Quận 1', 'restaurant', 
+('kfc_vietnam', 'contact@kfc.com.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'KFC Manager', '19006886', N'Lê Lai, Quận 1', 'restaurant', 
  N'KFC Vietnam', N'Gà rán Kentucky trứ danh thế giới. Vị ngon trên từng ngón tay.', 
  'https://static.kfcvietnam.com.vn/images/content/home/carousel/3.jpg', N'Hồ Chí Minh'),
 
 -- 3. Restaurant: Phúc Long
-('phuclong', 'info@phuclong.com.vn', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', 'Phuc Long Manager', '02862630377', N'42 Ngô Đức Kế, Quận 1', 'restaurant', 
+('phuclong', 'info@phuclong.com.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Phuc Long Manager', '02862630377', N'42 Ngô Đức Kế, Quận 1', 'restaurant', 
  N'Phúc Long Tea & Coffee', N'Thương hiệu trà và cà phê thượng hạng từ năm 1968.', 
  'https://phuclong.com.vn/uploads/store/0530467772637255d642b58872658a2d.jpg', N'Hồ Chí Minh'),
 
 -- 4. Restaurant: Pizza 4P's
-('pizza4ps', 'booking@pizza4ps.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', '4Ps Manager', '19006043', N'8 Thủ Khoa Huân, Quận 1', 'restaurant', 
+('pizza4ps', 'booking@pizza4ps.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', '4Ps Manager', '19006043', N'8 Thủ Khoa Huân, Quận 1', 'restaurant', 
  N'Pizza 4P''s', N'Pizza kiểu Nhật với phô mai tự làm. Mang lại sự an nhiên cho tâm hồn.', 
  'https://pizza4ps.com/wp-content/uploads/2021/08/Pizza-4Ps-Ben-Thanh-1.jpg', N'Hồ Chí Minh'),
 
 -- 5. Restaurant: Cơm Tấm Cali
-('comtamcali', 'lienhe@comtamcali.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', 'Cali Manager', '02839252222', N'236 Lê Thánh Tôn, Quận 1', 'restaurant', 
+('comtamcali', 'lienhe@comtamcali.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Cali Manager', '02839252222', N'236 Lê Thánh Tôn, Quận 1', 'restaurant', 
  N'Cơm Tấm Cali', N'Hệ thống cơm tấm văn phòng sạch sẽ, ngon miệng, chuẩn vị Sài Gòn.', 
  'https://comtamcali.com/wp-content/uploads/2020/07/slide-1.jpg', N'Hồ Chí Minh'),
 
--- 6. Restaurant: Phở Hùng (Hà Nội)
-('phohung', 'info@phohung.vn', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', 'Pho Hung Owner', '02439363636', N'24 Láng Hạ, Đống Đa', 'restaurant', 
+-- 6. Restaurant: Phở Hùng
+('phohung', 'info@phohung.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Pho Hung Owner', '02439363636', N'24 Láng Hạ, Đống Đa', 'restaurant', 
  N'Phở Hùng', N'Hương vị phở truyền thống Hà Nội, nước dùng đậm đà.', 
  'https://cdn.tgdd.vn/Files/2022/01/25/1412806/pho-hung-huong-vi-pho-truyen-thong-giua-long-sai-gon-202201250953187289.jpg', N'Hà Nội'),
 
 -- 7. Customers
-('khangdepzai', 'khang@gmail.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', N'Lê Khang', '0987654321', N'Landmark 81, Bình Thạnh', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh'),
-('thanhhang', 'hang@gmail.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', N'Phạm Thanh Hằng', '0912345678', N'Times City, Hai Bà Trưng', 'customer', NULL, NULL, NULL, N'Hà Nội'),
-('elonmusk', 'elon@tesla.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4h/j.8h9.e', N'Elon Musk', '0999999999', N'Bitexco Financial Tower', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh');
+('khangdepzai', 'khang@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Lê Khang', '0987654321', N'Landmark 81, Bình Thạnh', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh'),
+('thanhhang', 'hang@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Phạm Thanh Hằng', '0912345678', N'Times City, Hai Bà Trưng', 'customer', NULL, NULL, NULL, N'Hà Nội'),
+('elonmusk', 'elon@tesla.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Elon Musk', '0999999999', N'Bitexco Financial Tower', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh');
 GO
-
 
 -- ====================================================
 -- 2. PRODUCT SERVICE (Database: ProductDB)
@@ -99,13 +93,13 @@ CREATE TABLE products (
     category NVARCHAR(100),
     is_available INT DEFAULT 1,
     stock_quantity INT DEFAULT 100,
-    weight FLOAT DEFAULT 0.5, -- kg
-    preparation_time INT DEFAULT 15, -- minutes
+    weight FLOAT DEFAULT 0.5,
+    preparation_time INT DEFAULT 15,
+    options NVARCHAR(MAX), -- [FIX] Added for JSON options
     created_at DATETIME DEFAULT GETDATE()
 );
 
--- SEED DATA: PRODUCTS (Map ID UserDB: 2=KFC, 3=PhucLong, 4=4Ps, 5=Cali, 6=PhoHung)
-
+-- SEED DATA: PRODUCTS
 INSERT INTO products (restaurant_id, name, description, price, original_price, image_url, category, weight) VALUES 
 -- KFC (ID: 2)
 (2, N'Combo Gà Rán Cơ Bản', N'2 Miếng Gà Giòn Cay + 1 Khoai Tây Chiên (Vừa) + 1 Pepsi', 89000, 105000, 'https://static.kfcvietnam.com.vn/images/items/lg/Combo-Ga-Ran-A.jpg', N'Combo', 0.8),
@@ -133,7 +127,6 @@ INSERT INTO products (restaurant_id, name, description, price, original_price, i
 (6, N'Phở Tái Lăn', N'Thịt bò xào lăn thơm phức tỏi.', 85000, 85000, 'https://phohung.com.vn/wp-content/uploads/2020/08/pho-tai-lan.jpg', N'Phở', 0.8);
 GO
 
-
 -- ====================================================
 -- 3. ORDER SERVICE (Database: OrderDB)
 -- ====================================================
@@ -150,9 +143,10 @@ CREATE TABLE drones (
     id INT IDENTITY(1,1) PRIMARY KEY,
     name NVARCHAR(100) NOT NULL,
     model VARCHAR(100),
-    status VARCHAR(20) DEFAULT 'idle', -- idle, busy, maintenance, charging
+    status VARCHAR(20) DEFAULT 'idle',
     battery_level FLOAT DEFAULT 100.0,
-    max_payload FLOAT DEFAULT 5.0, -- kg
+    max_payload FLOAT DEFAULT 5.0,
+    max_distance_km FLOAT DEFAULT 15.0, -- [FIX] Added
     current_lat FLOAT,
     current_lng FLOAT,
     created_at DATETIME DEFAULT GETDATE()
@@ -163,15 +157,18 @@ CREATE TABLE orders (
     user_id INT NOT NULL,
     restaurant_id INT NOT NULL,
     total_amount FLOAT NOT NULL,
-    status VARCHAR(50) DEFAULT 'waiting_confirmation', -- waiting_confirmation, confirmed, preparing, in_delivery, delivered, cancelled
+    total_weight FLOAT DEFAULT 0, -- [FIX] Added
+    status VARCHAR(50) DEFAULT 'waiting_confirmation',
     delivery_address NVARCHAR(500) NOT NULL,
     delivery_lat FLOAT,
     delivery_lng FLOAT,
     restaurant_lat FLOAT,
     restaurant_lng FLOAT,
     distance_km FLOAT,
-    drone_id INT, 
+    drone_id INT,
     estimated_delivery_time INT DEFAULT 30,
+    rejection_reason NVARCHAR(MAX), -- [FIX] Added
+    notes NVARCHAR(MAX), -- [FIX] Added
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE()
 );
@@ -183,44 +180,33 @@ CREATE TABLE order_items (
     product_name NVARCHAR(255) NOT NULL,
     quantity INT NOT NULL,
     price FLOAT NOT NULL,
+    weight FLOAT DEFAULT 0.5, -- [FIX] Added
     FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
 -- SEED DATA: DRONES
--- Tọa độ: Lấy trung tâm TP.HCM (Bitexco) làm mốc
-INSERT INTO drones (name, model, status, battery_level, current_lat, current_lng, max_payload) VALUES 
-(N'Falcon Heavy', 'DJI Matrice 600', 'idle', 100.0, 10.771595, 106.704758, 6.0),
-(N'Nimbus 2000', 'DJI Mavic 3', 'in_delivery', 78.5, 10.775845, 106.701758, 2.5),
-(N'Firebolt', 'Custom FPV', 'charging', 12.0, 10.771595, 106.704758, 1.5),
-(N'Sky Walker', 'Amazon Prime Air Clone', 'maintenance', 0.0, 10.771595, 106.704758, 4.0),
-(N'Hawk Eye 1', 'DJI Phantom 4', 'idle', 92.0, 10.791595, 106.694758, 3.0);
+INSERT INTO drones (name, model, status, battery_level, current_lat, current_lng, max_payload, max_distance_km) VALUES 
+(N'Falcon Heavy', 'DJI Matrice 600', 'idle', 100.0, 10.771595, 106.704758, 6.0, 20.0),
+(N'Nimbus 2000', 'DJI Mavic 3', 'idle', 78.5, 10.775845, 106.701758, 2.5, 15.0),
+(N'Firebolt', 'Custom FPV', 'charging', 12.0, 10.771595, 106.704758, 1.5, 10.0),
+(N'Sky Walker', 'Amazon Prime Air Clone', 'maintenance', 0.0, 10.771595, 106.704758, 4.0, 25.0),
+(N'Hawk Eye 1', 'DJI Phantom 4', 'idle', 92.0, 10.791595, 106.694758, 3.0, 18.0);
 
--- SEED DATA: ORDERS (Tạo vài đơn hàng mẫu)
--- Đơn 1: Khách hàng (7) mua KFC (2) - Đã giao
-INSERT INTO orders (user_id, restaurant_id, total_amount, status, delivery_address, drone_id, created_at) VALUES 
-(7, 2, 134000, 'delivered', N'Landmark 81, Vinhomes Central Park', 1, DATEADD(hour, -2, GETDATE()));
--- Items đơn 1
-INSERT INTO order_items (order_id, product_id, product_name, quantity, price) VALUES 
-(1, 1, N'Combo Gà Rán Cơ Bản', 1, 89000),
-(1, 2, N'Gà Popcorn (Vừa)', 1, 45000);
+-- SEED DATA: ORDERS
+INSERT INTO orders (user_id, restaurant_id, total_amount, total_weight, status, delivery_address, drone_id, created_at) VALUES 
+(7, 2, 134000, 1.1, 'delivered', N'Landmark 81, Vinhomes Central Park', 1, DATEADD(hour, -2, GETDATE()));
 
--- Đơn 2: Khách hàng (8) mua Phúc Long (3) - Đang giao
-INSERT INTO orders (user_id, restaurant_id, total_amount, status, delivery_address, drone_id, created_at) VALUES 
-(8, 3, 115000, 'in_delivery', N'Bitexco Tower, Quận 1', 2, DATEADD(minute, -15, GETDATE()));
--- Items đơn 2
-INSERT INTO order_items (order_id, product_id, product_name, quantity, price) VALUES 
-(2, 5, N'Trà Sữa Phúc Long', 1, 55000),
-(2, 6, N'Trà Đào Cam Sả', 1, 60000);
+INSERT INTO order_items (order_id, product_id, product_name, quantity, price, weight) VALUES 
+(1, 1, N'Combo Gà Rán Cơ Bản', 1, 89000, 0.8),
+(1, 2, N'Gà Popcorn (Vừa)', 1, 45000, 0.3);
 
--- Đơn 3: Khách hàng (7) mua Pizza 4P's (4) - Chờ xác nhận
-INSERT INTO orders (user_id, restaurant_id, total_amount, status, delivery_address, drone_id, created_at) VALUES 
-(7, 4, 445000, 'waiting_confirmation', N'Landmark 81, Vinhomes Central Park', NULL, GETDATE());
--- Items đơn 3
-INSERT INTO order_items (order_id, product_id, product_name, quantity, price) VALUES 
-(3, 8, N'Pizza 4 Cheese Honey', 1, 280000),
-(3, 10, N'Salad Burrata kèm Trái Cây', 1, 165000);
+INSERT INTO orders (user_id, restaurant_id, total_amount, total_weight, status, delivery_address, drone_id, created_at) VALUES 
+(8, 3, 115000, 1.0, 'in_delivery', N'Bitexco Tower, Quận 1', 2, DATEADD(minute, -15, GETDATE()));
+
+INSERT INTO order_items (order_id, product_id, product_name, quantity, price, weight) VALUES 
+(2, 5, N'Trà Sữa Phúc Long', 1, 55000, 0.5),
+(2, 6, N'Trà Đào Cam Sả', 1, 60000, 0.5);
 GO
-
 
 -- ====================================================
 -- 4. PAYMENT SERVICE (Database: PaymentDB)
@@ -236,8 +222,8 @@ CREATE TABLE payments (
     order_id INT NOT NULL UNIQUE,
     user_id INT NOT NULL,
     amount FLOAT NOT NULL,
-    payment_method VARCHAR(50) NOT NULL, -- 'momo', 'zalo_pay', 'credit_card', 'cod'
-    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed', 'failed'
+    payment_method VARCHAR(50) NOT NULL,
+    status VARCHAR(50) DEFAULT 'pending',
     transaction_id VARCHAR(255) UNIQUE,
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE()
@@ -246,6 +232,5 @@ CREATE TABLE payments (
 -- SEED DATA: PAYMENTS
 INSERT INTO payments (order_id, user_id, amount, payment_method, status, transaction_id, created_at) VALUES 
 (1, 7, 134000, 'momo', 'completed', 'MOMO123456789', DATEADD(hour, -2, GETDATE())),
-(2, 8, 115000, 'credit_card', 'completed', 'VISA987654321', DATEADD(minute, -15, GETDATE())),
-(3, 7, 445000, 'zalo_pay', 'pending', NULL, GETDATE());
+(2, 8, 115000, 'credit_card', 'completed', 'VISA987654321', DATEADD(minute, -15, GETDATE()));
 GO

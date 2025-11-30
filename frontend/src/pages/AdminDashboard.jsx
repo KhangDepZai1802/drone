@@ -4,7 +4,7 @@ import { Users, Store, Package, Plane, ShieldCheck } from 'lucide-react';
 import { userApi, orderApi } from '../api';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('restaurants');
   const [loading, setLoading] = useState(true);
   
   const [users, setUsers] = useState([]);
@@ -15,21 +15,41 @@ const AdminDashboard = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
+      console.log('📊 Fetching admin data...');
       
-      // [FIX] Gọi đúng endpoints
+      // ✅ FIX: Gọi đúng endpoints với error handling
       const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
-        userApi.get('/users'),           // GET /api/users/users
-        userApi.get('/restaurants'),     // GET /api/users/restaurants
-        orderApi.get('/orders'),         // GET /api/orders/orders
-        orderApi.get('/drones'),         // GET /api/orders/drones
+        userApi.get('/users').catch(err => {
+          console.error('⚠️ /users error:', err.response?.status);
+          return { data: [] };
+        }),
+        userApi.get('/restaurants').catch(err => {
+          console.error('⚠️ /restaurants error:', err);
+          return { data: [] };
+        }),
+        orderApi.get('/orders').catch(err => {
+          console.error('⚠️ /orders error:', err);
+          return { data: [] };
+        }),
+        orderApi.get('/drones').catch(err => {
+          console.error('⚠️ /drones error:', err);
+          return { data: [] };
+        })
       ]);
+
+      console.log('✅ Data loaded:', {
+        users: usersRes.data.length,
+        restaurants: restaurantsRes.data.length,
+        orders: ordersRes.data.length,
+        drones: dronesRes.data.length
+      });
 
       setUsers(usersRes.data);
       setRestaurants(restaurantsRes.data);
       setOrders(ordersRes.data);
       setDrones(dronesRes.data);
     } catch (error) {
-      console.error("Lỗi tải dữ liệu Admin:", error);
+      console.error("❌ Lỗi tải dữ liệu Admin:", error);
       toast.error('Không thể tải dữ liệu từ Server');
     } finally {
       setLoading(false);
@@ -154,131 +174,155 @@ const AdminDashboard = () => {
           <div className="p-6 overflow-x-auto">
             {/* USERS TAB */}
             {activeTab === 'users' && (
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="text-gray-500 border-b">
-                    <th className="py-3">ID</th>
-                    <th className="py-3">Họ tên</th>
-                    <th className="py-3">Email</th>
-                    <th className="py-3">Vai trò</th>
-                    <th className="py-3">Ngày tạo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 font-bold">#{u.id}</td>
-                      <td className="py-3 font-medium">{u.full_name || u.username}</td>
-                      <td className="py-3 text-gray-600">{u.email}</td>
-                      <td className="py-3">{getRoleBadge(u.role)}</td>
-                      <td className="py-3 text-sm text-gray-500">
-                        {new Date(u.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                {users.length === 0 ? (
+                  <p className="text-center text-gray-500 py-10">Không có dữ liệu người dùng</p>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-gray-500 border-b">
+                        <th className="py-3">ID</th>
+                        <th className="py-3">Họ tên</th>
+                        <th className="py-3">Email</th>
+                        <th className="py-3">Vai trò</th>
+                        <th className="py-3">Ngày tạo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 font-bold">#{u.id}</td>
+                          <td className="py-3 font-medium">{u.full_name || u.username}</td>
+                          <td className="py-3 text-gray-600">{u.email}</td>
+                          <td className="py-3">{getRoleBadge(u.role)}</td>
+                          <td className="py-3 text-sm text-gray-500">
+                            {new Date(u.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
             )}
 
             {/* RESTAURANTS TAB */}
             {activeTab === 'restaurants' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {restaurants.map(r => (
-                   <div key={r.id} className="border rounded-lg p-4 flex justify-between items-center hover:shadow-md transition">
-                      <div>
-                        <h3 className="font-bold text-lg">{r.restaurant_name}</h3>
-                        <p className="text-gray-500 text-sm">📍 {r.city || 'N/A'}</p>
-                        <p className="text-gray-400 text-xs mt-1 line-clamp-1">
-                          {r.restaurant_description}
-                        </p>
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {r.is_active ? 'Hoạt động' : 'Đóng cửa'}
-                      </div>
-                   </div>
-                 ))}
-              </div>
+              <>
+                {restaurants.length === 0 ? (
+                  <p className="text-center text-gray-500 py-10">Chưa có nhà hàng nào</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {restaurants.map(r => (
+                       <div key={r.id} className="border rounded-lg p-4 flex justify-between items-center hover:shadow-md transition">
+                          <div>
+                            <h3 className="font-bold text-lg">{r.restaurant_name}</h3>
+                            <p className="text-gray-500 text-sm">📍 {r.city || 'N/A'}</p>
+                            <p className="text-gray-400 text-xs mt-1 line-clamp-1">
+                              {r.restaurant_description}
+                            </p>
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {r.is_active ? 'Hoạt động' : 'Đóng cửa'}
+                          </div>
+                       </div>
+                     ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* ORDERS TAB */}
             {activeTab === 'orders' && (
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="text-gray-500 border-b">
-                    <th className="py-3">Mã đơn</th>
-                    <th className="py-3">Khách (ID)</th>
-                    <th className="py-3">Tổng tiền</th>
-                    <th className="py-3">Trạng thái</th>
-                    <th className="py-3">Ngày đặt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map(o => (
-                    <tr key={o.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 font-bold">#{o.id}</td>
-                      <td className="py-3">User #{o.user_id}</td>
-                      <td className="py-3 font-bold text-rose-600">
-                        {parseInt(o.total_amount).toLocaleString()}đ
-                      </td>
-                      <td className="py-3">
-                        <span className={`px-2 py-1 rounded text-xs uppercase font-bold ${
-                          o.status === 'delivered' ? 'bg-green-100 text-green-700' : 
-                          o.status === 'in_delivery' ? 'bg-blue-100 text-blue-700' : 
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {o.status}
-                        </span>
-                      </td>
-                      <td className="py-3 text-sm text-gray-500">
-                        {new Date(o.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                {orders.length === 0 ? (
+                  <p className="text-center text-gray-500 py-10">Chưa có đơn hàng nào</p>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-gray-500 border-b">
+                        <th className="py-3">Mã đơn</th>
+                        <th className="py-3">Khách (ID)</th>
+                        <th className="py-3">Tổng tiền</th>
+                        <th className="py-3">Trạng thái</th>
+                        <th className="py-3">Ngày đặt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map(o => (
+                        <tr key={o.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 font-bold">#{o.id}</td>
+                          <td className="py-3">User #{o.user_id}</td>
+                          <td className="py-3 font-bold text-rose-600">
+                            {parseInt(o.total_amount).toLocaleString()}đ
+                          </td>
+                          <td className="py-3">
+                            <span className={`px-2 py-1 rounded text-xs uppercase font-bold ${
+                              o.status === 'delivered' ? 'bg-green-100 text-green-700' : 
+                              o.status === 'in_delivery' ? 'bg-blue-100 text-blue-700' : 
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {o.status}
+                            </span>
+                          </td>
+                          <td className="py-3 text-sm text-gray-500">
+                            {new Date(o.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
             )}
 
             {/* DRONES TAB */}
             {activeTab === 'drones' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {drones.map(d => (
-                  <div key={d.id} className="border rounded-xl p-5 hover:shadow-lg transition relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="bg-indigo-50 p-3 rounded-lg">
-                        <Plane className="text-indigo-600" size={24} />
-                      </div>
-                      {getStatusBadge(d.status)}
-                    </div>
-                    <h3 className="font-bold text-lg">{d.name}</h3>
-                    <p className="text-gray-500 text-sm mb-4">{d.model}</p>
-                    
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-500">Pin</span>
-                          <span className="font-bold">{d.battery_level}%</span>
+              <>
+                {drones.length === 0 ? (
+                  <p className="text-center text-gray-500 py-10">Chưa có drone nào</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {drones.map(d => (
+                      <div key={d.id} className="border rounded-xl p-5 hover:shadow-lg transition relative overflow-hidden">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="bg-indigo-50 p-3 rounded-lg">
+                            <Plane className="text-indigo-600" size={24} />
+                          </div>
+                          {getStatusBadge(d.status)}
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${
-                              d.battery_level > 50 ? 'bg-green-500' : 
-                              d.battery_level > 20 ? 'bg-yellow-500' : 
-                              'bg-red-500'
-                            }`} 
-                            style={{width: `${d.battery_level}%`}}
-                          ></div>
+                        <h3 className="font-bold text-lg">{d.name}</h3>
+                        <p className="text-gray-500 text-sm mb-4">{d.model}</p>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-500">Pin</span>
+                              <span className="font-bold">{d.battery_level}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full ${
+                                  d.battery_level > 50 ? 'bg-green-500' : 
+                                  d.battery_level > 20 ? 'bg-yellow-500' : 
+                                  'bg-red-500'
+                                }`} 
+                                style={{width: `${d.battery_level}%`}}
+                              ></div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-sm pt-2 border-t">
+                            <span className="text-gray-500">Tải trọng tối đa:</span>
+                            <span className="font-bold">{d.max_payload} kg</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex justify-between text-sm pt-2 border-t">
-                        <span className="text-gray-500">Tải trọng tối đa:</span>
-                        <span className="font-bold">{d.max_payload} kg</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>

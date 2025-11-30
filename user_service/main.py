@@ -7,11 +7,12 @@ from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from pydantic import BaseModel, EmailStr
+import bcrypt 
 from typing import Optional, List
 import os
 import time
-
+# 👇👇👇 BẠN ĐANG THIẾU DÒNG QUAN TRỌNG NÀY 👇👇👇
+from pydantic import BaseModel, EmailStr
 # ==========================================
 # CONFIGURATION
 # ==========================================
@@ -119,11 +120,21 @@ def get_db():
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
-    """Verify password với bcrypt"""
+    """Verify password trực tiếp bằng bcrypt (Bỏ qua passlib)"""
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        # Chuyển đổi sang bytes vì bcrypt yêu cầu bytes
+        password_bytes = plain_password.encode('utf-8')
+        
+        # hashed_password từ DB có thể đang là string, cần encode
+        hash_bytes = hashed_password.encode('utf-8')
+
+        # Dùng trực tiếp bcrypt để check
+        is_correct = bcrypt.checkpw(password_bytes, hash_bytes)
+        print(f"🔍 bcrypt check result: {is_correct}")
+        return is_correct
+        
     except Exception as e:
-        print(f"❌ Password verify error: {e}")
+        print(f"❌ LỖI CODE VERIFY: {e}")
         return False
 
 def get_password_hash(password):
@@ -254,12 +265,31 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     print(f"   Active: {user.is_active}")
     print(f"   Hash in DB: {user.hashed_password[:30]}...")
     
+    # [DEBUG] In ra password để test (CHỈ DÙNG KHI DEBUG)
+    print(f"   Password nhập vào: {form_data.password}")
+    
     # 2. Verify password
     print(f"🔍 Verifying password...")
     password_valid = verify_password(form_data.password, user.hashed_password)
     
+    print(f"   bcrypt.checkpw result: {password_valid}")
+    
     if not password_valid:
         print(f"❌ Wrong password")
+        print(f"   Expected hash: {user.hashed_password}")
+        print(f"   Password given: {form_data.password}")
+        
+        # [DEBUG] Test hash bằng tay
+        import bcrypt
+        try:
+            manual_check = bcrypt.checkpw(
+                form_data.password.encode('utf-8'), 
+                user.hashed_password.encode('utf-8')
+            )
+            print(f"   Manual bcrypt check: {manual_check}")
+        except Exception as e:
+            print(f"   Manual check error: {e}")
+        
         print("=" * 60)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -402,6 +432,7 @@ async def update_profile(
     db.commit()
     db.refresh(user)
     return user
+
 
 if __name__ == "__main__":
     import uvicorn

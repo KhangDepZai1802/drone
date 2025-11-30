@@ -416,6 +416,8 @@ async def get_restaurant_hours(restaurant_id: int, db: Session = Depends(get_db)
     }
 # --- Thêm đoạn này vào product_service/main.py ---
 
+
+# 6. GET BY RESTAURANT
 @app.get("/products/restaurant/{restaurant_id}", response_model=List[ProductResponse])
 async def get_restaurant_products(restaurant_id: int, db: Session = Depends(get_db)):
     """Lấy danh sách món ăn của một nhà hàng cụ thể"""
