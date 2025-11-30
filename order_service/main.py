@@ -16,6 +16,7 @@ import math
 DATABASE_URL = os.getenv("DATABASE_URL")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user_service:8000")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://product_service:8000")
+PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://payment_service:8000")
 
 # Database setup
 engine = create_engine(DATABASE_URL, echo=True)
@@ -134,6 +135,24 @@ class OrderCreate(BaseModel):
     delivery_lng: Optional[float] = None
     notes: Optional[str] = None
     items: List[OrderItemCreate]
+
+
+class CheckoutItem(BaseModel):
+    restaurant_id: int
+    product_id: int
+    product_name: str
+    quantity: int
+    price: float
+    weight: Optional[float] = 0.5
+
+
+class CheckoutRequest(BaseModel):
+    items: List[CheckoutItem]
+    delivery_address: str
+    delivery_lat: Optional[float] = None
+    delivery_lng: Optional[float] = None
+    notes: Optional[str] = None
+    payment_method: Optional[str] = 'cod'
 
 class OrderResponse(BaseModel):
     id: int
@@ -417,6 +436,153 @@ async def create_order(order: OrderCreate, authorization: str = Header(None), db
     except Exception:
         response.history = []
     return response
+
+
+@app.post("/orders/checkout", status_code=status.HTTP_201_CREATED)
+async def checkout_order(checkout: CheckoutRequest, authorization: str = Header(None), db: Session = Depends(get_db)):
+    """Create multiple orders from a single checkout (split per restaurant).
+    The endpoint groups items by restaurant_id and creates one Order per restaurant.
+    If `payment_method` is provided and not 'cod', this endpoint attempts to create a payment for each order
+    by calling the Payment Service using the caller's Authorization header.
+    Returns: { orders: [OrderResponse], payments: [{order_id, status, payment_id?, error?}] }
+    """
+    user = await get_current_user(authorization)
+    if user['role'] != 'customer':
+        raise HTTPException(403, 'Only customers can checkout')
+
+    items = checkout.items or []
+    if not items:
+        raise HTTPException(400, 'No items in checkout')
+
+    # Pre-check availability for all products to avoid partial decreases
+    async with httpx.AsyncClient() as client:
+        for it in items:
+            try:
+                res = await client.get(f"{PRODUCT_SERVICE_URL}/products/{it.product_id}", timeout=5.0)
+                if res.status_code != 200:
+                    raise HTTPException(400, f'Product {it.product_id} unavailable')
+                prod = res.json()
+                if not prod.get('is_available') or prod.get('stock_quantity', 0) < it.quantity:
+                    raise HTTPException(400, f"Product '{it.product_name}' is out of stock or unavailable")
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(503, f'Product service unavailable: {e}')
+
+    # Group items by restaurant
+    groups = {}
+    for it in items:
+        groups.setdefault(it.restaurant_id, []).append(it)
+
+    created_orders = []
+    payment_results = []
+
+    # Process each group as a separate order
+    async with httpx.AsyncClient() as client:
+        for restaurant_id, items_group in groups.items():
+            # Build order totals
+            total = sum(i.price * i.quantity for i in items_group)
+            total_weight = sum(i.weight * i.quantity for i in items_group)
+
+            # Fetch restaurant location (best-effort)
+            try:
+                rres = await client.get(f"{USER_SERVICE_URL}/restaurants/{restaurant_id}", timeout=5.0)
+                restaurant = rres.json() if rres.status_code == 200 else {}
+            except Exception:
+                restaurant = {}
+
+            r_lat = restaurant.get('latitude', 10.762622)
+            r_lng = restaurant.get('longitude', 106.660172)
+            dist_km = 0
+            if checkout.delivery_lat and checkout.delivery_lng:
+                dist_km = calculate_distance(r_lat, r_lng, checkout.delivery_lat, checkout.delivery_lng)
+                if dist_km > 30:
+                    raise HTTPException(400, 'Delivery distance exceeds 30km limit for one of the restaurants')
+
+            # Create Order DB row
+            db_order = Order(
+                user_id=user['user_id'],
+                restaurant_id=restaurant_id,
+                total_amount=total,
+                total_weight=total_weight,
+                delivery_address=checkout.delivery_address,
+                delivery_lat=checkout.delivery_lat,
+                delivery_lng=checkout.delivery_lng,
+                restaurant_lat=r_lat,
+                restaurant_lng=r_lng,
+                distance_km=dist_km,
+                notes=checkout.notes,
+                estimated_delivery_time=int(dist_km * 2 + 20),
+                status=OrderStatus.WAITING_CONFIRMATION
+            )
+            db.add(db_order)
+            db.commit()
+            db.refresh(db_order)
+
+            # Add items and decrease stock
+            for it in items_group:
+                # decrease stock (call product service)
+                try:
+                    await client.post(f"{PRODUCT_SERVICE_URL}/products/{it.product_id}/decrease-stock", params={'quantity': it.quantity}, timeout=5.0)
+                except Exception:
+                    # if decrease fails, continue but warn (in production would revert)
+                    raise HTTPException(400, f'Failed to decrease stock for product {it.product_id}')
+
+                db_item = OrderItem(
+                    order_id=db_order.id,
+                    product_id=it.product_id,
+                    product_name=it.product_name,
+                    quantity=it.quantity,
+                    price=it.price,
+                    weight=it.weight or 0.5
+                )
+                db.add(db_item)
+            db.commit()
+
+            # initial history entry
+            try:
+                history = OrderStatusHistory(
+                    order_id=db_order.id,
+                    status=OrderStatus.WAITING_CONFIRMATION.value,
+                    changed_by=user['user_id'],
+                    role=user['role'],
+                    note='Order created (split checkout)',
+                    changed_at=datetime.utcnow()
+                )
+                db.add(history)
+                db.commit()
+            except Exception:
+                print('Warning: could not write order history during checkout')
+
+            # Prepare response shape
+            items_db = db.query(OrderItem).filter(OrderItem.order_id == db_order.id).all()
+            resp = OrderResponse.from_orm(db_order)
+            resp.items = [OrderItemResponse.from_orm(i) for i in items_db]
+            try:
+                rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == db_order.id).order_by(OrderStatusHistory.changed_at).all()
+                resp.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+            except Exception:
+                resp.history = []
+
+            created_orders.append(resp)
+
+            # If payment required, create payment record via Payment Service
+            if checkout.payment_method and checkout.payment_method != 'cod':
+                try:
+                    pay_res = await client.post(
+                        f"{PAYMENT_SERVICE_URL}/payments",
+                        json={'order_id': db_order.id, 'amount': db_order.total_amount, 'payment_method': checkout.payment_method},
+                        headers={'Authorization': authorization},
+                        timeout=10.0
+                    )
+                    if pay_res.status_code in (200, 201):
+                        payment_results.append({'order_id': db_order.id, 'status': 'created', 'payment': pay_res.json()})
+                    else:
+                        payment_results.append({'order_id': db_order.id, 'status': 'error', 'error': pay_res.text})
+                except Exception as e:
+                    payment_results.append({'order_id': db_order.id, 'status': 'error', 'error': str(e)})
+
+    return {'orders': created_orders, 'payments': payment_results}
 
 @app.post("/orders/{order_id}/accept", response_model=OrderResponse)
 async def accept_order(order_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):

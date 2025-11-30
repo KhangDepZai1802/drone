@@ -80,42 +80,42 @@ const CartPage = () => {
     setLoading(true);
     
     try {
-      // Step 1: Create Order
-      console.log('📦 Creating order...');
-      const orderData = {
-        restaurant_id: cart[0].restaurant_id,
-        delivery_address: formData.delivery_address,
-        notes: formData.notes,
+      // Step 1: Create orders for each restaurant via single checkout call
+      console.log('📦 Checkout: creating orders for each restaurant...');
+      const checkoutPayload = {
         items: cart.map(item => ({
+          restaurant_id: item.restaurant_id,
           product_id: item.product_id,
           product_name: item.product_name,
           quantity: item.quantity,
           price: item.price,
           weight: item.weight || 0.5
-        }))
-      };
-
-      const orderRes = await orderApi.post('/orders', orderData);
-      console.log('✅ Order created:', orderRes.data);
-      
-      // Step 2: Create Payment
-      console.log('💳 Creating payment...');
-      const paymentData = {
-        order_id: orderRes.data.id,
-        amount: calculateTotal(),
+        })),
+        delivery_address: formData.delivery_address,
+        delivery_lat: formData.delivery_lat || null,
+        delivery_lng: formData.delivery_lng || null,
+        notes: formData.notes,
         payment_method: formData.payment_method
       };
-      
-      const paymentRes = await paymentApi.post('/payments', paymentData);
-      console.log('✅ Payment created:', paymentRes.data);
-      
-      // Step 3: Clear Cart
-      console.log('🧹 Clearing cart...');
-      setCart([]);
-      localStorage.setItem('drone_cart', JSON.stringify([]));
-      window.dispatchEvent(new Event('cart-updated'));
-      
-      toast.success('✅ Đặt hàng thành công! 🎉', { autoClose: 2000 });
+
+      const checkoutRes = await orderApi.post('/orders/checkout', checkoutPayload);
+      console.log('✅ Checkout result:', checkoutRes.data);
+
+      const { orders: created, payments } = checkoutRes.data || {};
+
+      // If payments exist and any failed, do not clear cart and show error
+      const paymentErrors = payments && payments.some(p => p.status === 'error');
+
+      if (paymentErrors) {
+        toast.error('❌ Có lỗi khi xử lý thanh toán cho một hoặc nhiều hóa đơn. Vui lòng kiểm tra lại.', { autoClose: 4000 });
+      } else {
+        // All good — clear cart
+        console.log('🧹 Clearing cart...');
+        setCart([]);
+        localStorage.setItem('drone_cart', JSON.stringify([]));
+        window.dispatchEvent(new Event('cart-updated'));
+        toast.success('✅ Đặt hàng thành công! 🎉', { autoClose: 2000 });
+      }
       
       // Navigate to orders
       setTimeout(() => {

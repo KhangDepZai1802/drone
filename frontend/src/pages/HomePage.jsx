@@ -192,9 +192,10 @@ const HomePage = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {bestsellerProducts.map(product => (
-                <div 
-                  key={product.id} 
-                  className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition transform hover:-translate-y-1 border border-gray-100"
+                <Link
+                  key={product.id}
+                  to={`/restaurant/${product.restaurant_id}`}
+                  className="block bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition transform hover:-translate-y-1 border border-gray-100"
                 >
                   <div className="h-48 overflow-hidden relative">
                     <div className="absolute top-3 left-3 bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold">
@@ -219,7 +220,7 @@ const HomePage = () => {
                       <span className="text-xs text-gray-500">⏱️ {product.preparation_time || 15} phút</span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
