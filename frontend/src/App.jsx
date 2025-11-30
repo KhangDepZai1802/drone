@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, LogOut, Zap, ShieldCheck, Plane } from 'lucide-react';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // --- IMPORT API (CRITICAL FIX) ---
@@ -13,7 +13,7 @@ import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminDashboard from './pages/AdminDashboard';
 import RestaurantDashboard from './pages/RestaurantDashboard';
-
+import HomePage from './pages/HomePage';
 // ==========================================
 // NAVBAR COMPONENT
 // ==========================================
@@ -90,45 +90,8 @@ const Navbar = ({ user, cartCount, onLogout }) => {
   );
 };
 
-// ==========================================
-// HOME PAGE
-// ==========================================
-const HomePage = () => (
-  <div className="animate-fade-in">
-    <div className="relative bg-gradient-to-br from-rose-500 to-orange-400 text-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 py-24 flex flex-col md:flex-row items-center">
-        <div className="md:w-1/2 z-10">
-          <h1 className="text-5xl md:text-6xl font-extrabold leading-tight mb-6">
-            Giao đồ ăn siêu tốc <br/> bằng <span className="text-yellow-300">Drone</span>
-          </h1>
-          <p className="text-xl mb-8 text-white/90">Trải nghiệm công nghệ giao hàng tương lai. Nóng hổi, an toàn và chỉ mất 15 phút.</p>
-          <Link to="/restaurants" className="px-8 py-4 bg-white text-rose-500 font-bold rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition transform">
-            Đặt món ngay 🚀
-          </Link>
-        </div>
-        <div className="md:w-1/2 flex justify-center mt-10 md:mt-0 relative">
-          <div className="text-[150px] animate-bounce-slow">🚁</div>
-        </div>
-      </div>
-    </div>
-    <div className="py-20 bg-white">
-      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-10">
-        <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-            <Zap size={32} className="mx-auto text-blue-600 mb-4" />
-            <h3 className="text-xl font-bold">Siêu tốc độ</h3>
-        </div>
-        <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-            <ShieldCheck size={32} className="mx-auto text-green-600 mb-4" />
-            <h3 className="text-xl font-bold">An toàn</h3>
-        </div>
-        <div className="p-8 bg-gray-50 rounded-2xl hover:shadow-lg transition text-center">
-            <Plane size={32} className="mx-auto text-purple-600 mb-4" />
-            <h3 className="text-xl font-bold">Công nghệ cao</h3>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+// Note: HomePage component is implemented in ./pages/HomePage.jsx and is imported at the top.
+// The inline HomePage declaration was removed to avoid duplicate identifier errors.
 
 // ==========================================
 // LOGIN PAGE (FIXED)
@@ -247,7 +210,8 @@ const RegisterPage = () => {
       setLoading(false);
     }
   };
-
+  // React-Toastify is configured once in main.jsx via <ToastContainer />
+  // Avoid calling toast.configure inside components (it causes duplicate toasts and repeats on re-renders)
   return (
     <div className="min-h-[80vh] flex items-center justify-center bg-gray-100 py-10">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
@@ -344,7 +308,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800">
-      <ToastContainer position="top-right" autoClose={3000} />
+      {/* ToastContainer is mounted in src/main.jsx to avoid duplicates */}
       <Navbar user={user} cartCount={cart.reduce((a,b) => a+b.quantity, 0)} onLogout={handleLogout} />
       
       <main className="flex-grow">

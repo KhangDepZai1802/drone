@@ -164,23 +164,32 @@ async def create_payment(
     
     # Check duplicate
     existing = db.query(Payment).filter(Payment.order_id == payment.order_id).first()
+    db_payment = None
     if existing:
-        # Nếu thanh toán trước đó thất bại, có thể cho phép thử lại (logic mở rộng)
-        # Ở đây đơn giản là báo lỗi
+        # Nếu đã hoàn thành, báo lỗi
         if existing.status == "completed":
-             raise HTTPException(status_code=400, detail="Payment already exists for this order")
-    
-    # Tạo record payment
-    db_payment = Payment(
-        order_id=payment.order_id,
-        user_id=user["user_id"],
-        amount=payment.amount,
-        payment_method=payment.payment_method,
-        status="processing"
-    )
-    db.add(db_payment)
-    db.commit()
-    db.refresh(db_payment)
+            raise HTTPException(status_code=400, detail="Payment already exists for this order")
+
+        # Nếu có record trước đó chưa hoàn thành (failed/processing), cập nhật lại và tiếp tục xử lý
+        existing.amount = payment.amount
+        existing.payment_method = payment.payment_method
+        existing.status = "processing"
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        db_payment = existing
+    else:
+        # Tạo record payment mới
+        db_payment = Payment(
+            order_id=payment.order_id,
+            user_id=user["user_id"],
+            amount=payment.amount,
+            payment_method=payment.payment_method,
+            status="processing"
+        )
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
     
     # Xử lý thanh toán (Giả lập)
     result = process_payment_simulation(payment.payment_method, payment.amount)

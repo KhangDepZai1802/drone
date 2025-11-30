@@ -26,8 +26,19 @@ const CartPage = () => {
   }, []);
 
   const loadCart = () => {
+    // Support older/local static app key "cart" as well -> migrate to 'drone_cart'
+    const legacy = JSON.parse(localStorage.getItem('cart')) || [];
     const stored = JSON.parse(localStorage.getItem('drone_cart')) || [];
+    const merged = [...stored];
+    // Merge legacy items (avoid duplicates by product_id)
+    legacy.forEach(item => {
+      if (!merged.find(m => m.product_id === item.product_id)) merged.push(item);
+    });
     setCart(stored);
+    if (merged.length !== stored.length) {
+      localStorage.setItem('drone_cart', JSON.stringify(merged));
+      setCart(merged);
+    }
   };
 
   const updateQuantity = (index, delta) => {
@@ -48,50 +59,83 @@ const CartPage = () => {
     setCart(newCart);
     localStorage.setItem('drone_cart', JSON.stringify(newCart));
     window.dispatchEvent(new Event('cart-updated'));
-    toast.info('Đã xóa món');
+    toast.info('Đã xóa món', { autoClose: 2000 });
   };
 
   const calculateTotal = () => {
     return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  const handleCheckout = async (e) => {
-    e.preventDefault();
-    
+  const handleCheckout = async () => {
     if (!formData.delivery_address) {
-      toast.error('Vui lòng nhập địa chỉ giao hàng');
+      toast.error('Vui lòng nhập địa chỉ giao hàng', { autoClose: 2000 });
+      return;
+    }
+
+    if (cart.length === 0) {
+      toast.error('Giỏ hàng trống', { autoClose: 2000 });
       return;
     }
 
     setLoading(true);
+    
     try {
+      // Step 1: Create Order
+      console.log('📦 Creating order...');
       const orderData = {
         restaurant_id: cart[0].restaurant_id,
         delivery_address: formData.delivery_address,
         notes: formData.notes,
-        items: cart
+        items: cart.map(item => ({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          price: item.price,
+          weight: item.weight || 0.5
+        }))
       };
 
       const orderRes = await orderApi.post('/orders', orderData);
+      console.log('✅ Order created:', orderRes.data);
       
+      // Step 2: Create Payment
+      console.log('💳 Creating payment...');
       const paymentData = {
         order_id: orderRes.data.id,
         amount: calculateTotal(),
         payment_method: formData.payment_method
       };
       
-      await paymentApi.post('/payments', paymentData);
+      const paymentRes = await paymentApi.post('/payments', paymentData);
+      console.log('✅ Payment created:', paymentRes.data);
       
+      // Step 3: Clear Cart
+      console.log('🧹 Clearing cart...');
       setCart([]);
       localStorage.setItem('drone_cart', JSON.stringify([]));
       window.dispatchEvent(new Event('cart-updated'));
       
-      toast.success('Đặt hàng thành công! 🎉');
-      navigate('/orders');
+      toast.success('✅ Đặt hàng thành công! 🎉', { autoClose: 2000 });
+      
+      // Navigate to orders
+      setTimeout(() => {
+        navigate('/orders');
+      }, 1000);
       
     } catch (error) {
-      const msg = error.response?.data?.detail || 'Đặt hàng thất bại';
-      toast.error(msg);
+      console.error('❌ Checkout error:', error);
+      // Nếu payment đã tồn tại và đã hoàn thành → coi như thành công
+      const errDetail = error.response?.data?.detail || error.message || 'Đặt hàng thất bại';
+      if (String(errDetail).toLowerCase().includes('payment already exists') || String(errDetail).toLowerCase().includes('payment already exists for this order')) {
+        // Treat as success (payment already processed)
+        setCart([]);
+        localStorage.setItem('drone_cart', JSON.stringify([]));
+        window.dispatchEvent(new Event('cart-updated'));
+        toast.success('✅ Thanh toán đã thực hiện trước đó — đơn của bạn đã được ghi nhận', { autoClose: 3000 });
+        setTimeout(() => navigate('/orders'), 800);
+      } else {
+        toast.error('❌ ' + errDetail, { autoClose: 3000 });
+      }
     } finally {
       setLoading(false);
     }
@@ -158,7 +202,7 @@ const CartPage = () => {
           <div className="bg-white p-6 rounded-xl shadow-md h-fit sticky top-4">
             <h2 className="text-xl font-bold mb-4">Thông tin giao hàng</h2>
             
-            <form onSubmit={handleCheckout} className="space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Địa chỉ giao hàng *</label>
                 <textarea 
@@ -166,6 +210,7 @@ const CartPage = () => {
                   onChange={(e) => setFormData({...formData, delivery_address: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-rose-500 outline-none"
                   rows="3"
+                  placeholder="Nhập địa chỉ đầy đủ..."
                   required
                 />
               </div>
@@ -205,6 +250,17 @@ const CartPage = () => {
                     />
                     <span>Thẻ tín dụng</span>
                   </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="payment" 
+                      value="momo"
+                      checked={formData.payment_method === 'momo'}
+                      onChange={(e) => setFormData({...formData, payment_method: e.target.value})}
+                      className="text-rose-500"
+                    />
+                    <span>Ví MoMo</span>
+                  </label>
                 </div>
               </div>
 
@@ -228,13 +284,13 @@ const CartPage = () => {
               </div>
 
               <button 
-                type="submit"
+                onClick={handleCheckout}
                 disabled={loading}
                 className="w-full bg-rose-500 text-white py-3 rounded-lg font-bold hover:bg-rose-600 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {loading ? 'Đang xử lý...' : 'Đặt hàng ngay'}
               </button>
-            </form>
+            </div>
           </div>
         </div>
       </div>

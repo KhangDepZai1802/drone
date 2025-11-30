@@ -59,6 +59,7 @@ class Order(Base):
     drone_id = Column(Integer, nullable=True)
     estimated_delivery_time = Column(Integer, default=30)
     rejection_reason = Column(Text, nullable=True)
+    # Keep a human-friendly status history in a separate table (linked by order_id)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -72,6 +73,17 @@ class OrderItem(Base):
     quantity = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
     weight = Column(Float, default=0.5)
+
+
+class OrderStatusHistory(Base):
+    __tablename__ = "order_status_history"
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, nullable=False, index=True)
+    status = Column(String(50), nullable=False)
+    changed_by = Column(Integer, nullable=True)
+    role = Column(String(50), nullable=True)
+    note = Column(Text, nullable=True)
+    changed_at = Column(DateTime, default=datetime.utcnow)
 
 class Drone(Base):
     __tablename__ = "drones"
@@ -102,6 +114,19 @@ class OrderItemResponse(OrderItemCreate):
     class Config:
         from_attributes = True
 
+
+class OrderStatusHistoryResponse(BaseModel):
+    id: int
+    order_id: int
+    status: str
+    changed_by: Optional[int]
+    role: Optional[str]
+    note: Optional[str]
+    changed_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class OrderCreate(BaseModel):
     restaurant_id: int
     delivery_address: str
@@ -128,6 +153,7 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemResponse] = []
+    history: List[OrderStatusHistoryResponse] = []
     class Config:
         from_attributes = True
 
@@ -366,10 +392,30 @@ async def create_order(order: OrderCreate, authorization: str = Header(None), db
         db.add(db_item)
     db.commit()
     
+    # Create initial history entry
+    try:
+        history = OrderStatusHistory(
+            order_id=db_order.id,
+            status=OrderStatus.WAITING_CONFIRMATION.value,
+            changed_by=user['user_id'],
+            role=user['role'],
+            note='Order created',
+            changed_at=datetime.utcnow()
+        )
+        db.add(history)
+        db.commit()
+    except Exception as e:
+        print('Warning: could not write order history:', e)
+
     # Return full response
     items = db.query(OrderItem).filter(OrderItem.order_id == db_order.id).all()
     response = OrderResponse.from_orm(db_order)
     response.items = [OrderItemResponse.from_orm(item) for item in items]
+    try:
+        rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == db_order.id).order_by(OrderStatusHistory.changed_at).all()
+        response.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+    except Exception:
+        response.history = []
     return response
 
 @app.post("/orders/{order_id}/accept", response_model=OrderResponse)
@@ -385,7 +431,31 @@ async def accept_order(order_id: int, authorization: str = Header(None), db: Ses
     order.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(order)
-    return order # (Shortcut return, in thực tế nên return full model)
+
+    # Create a history entry for the restaurant acceptance
+    try:
+        history = OrderStatusHistory(
+            order_id=order.id,
+            status=OrderStatus.CONFIRMED.value,
+            changed_by=user['user_id'],
+            role=user['role'],
+            note='Restaurant accepted order',
+            changed_at=datetime.utcnow()
+        )
+        db.add(history)
+        db.commit()
+    except Exception as e:
+        print('Warning: could not write order history on accept:', e)
+    # Build full response
+    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    res = OrderResponse.from_orm(order)
+    res.items = [OrderItemResponse.from_orm(item) for item in items]
+    try:
+        rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.changed_at).all()
+        res.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+    except Exception:
+        res.history = []
+    return res
 
 @app.post("/orders/{order_id}/reject", response_model=OrderResponse)
 async def reject_order(order_id: int, reject_data: OrderReject, authorization: str = Header(None), db: Session = Depends(get_db)):
@@ -400,11 +470,34 @@ async def reject_order(order_id: int, reject_data: OrderReject, authorization: s
     order.rejection_reason = reject_data.reason
     order.updated_at = datetime.utcnow()
     db.commit()
+    # add history entry
+    try:
+        history = OrderStatusHistory(
+            order_id=order.id,
+            status=order.status.value,
+            changed_by=user['user_id'],
+            role=user['role'],
+            note=f'Reason: {reject_data.reason}',
+            changed_at=datetime.utcnow()
+        )
+        db.add(history)
+        db.commit()
+    except Exception as e:
+        print('Warning: could not write reject history:', e)
     
     # [TODO] Logic hoàn tồn kho (tăng lại số lượng) nên được thêm vào đây
     # Gọi API: POST /products/{id}/increase-stock (nếu có)
     
-    return order
+    # Build full response
+    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    res = OrderResponse.from_orm(order)
+    res.items = [OrderItemResponse.from_orm(item) for item in items]
+    try:
+        rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.changed_at).all()
+        res.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+    except Exception:
+        res.history = []
+    return res
 
 @app.get("/orders", response_model=List[OrderResponse])
 async def list_orders(
@@ -432,6 +525,12 @@ async def list_orders(
         items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
         res = OrderResponse.from_orm(order)
         res.items = [OrderItemResponse.from_orm(item) for item in items]
+        # attach history
+        try:
+            rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.changed_at).all()
+            res.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+        except Exception:
+            res.history = []
         result.append(res)
     return result
 
@@ -443,18 +542,48 @@ async def get_order(order_id: int, db: Session = Depends(get_db)):
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     res = OrderResponse.from_orm(order)
     res.items = [OrderItemResponse.from_orm(item) for item in items]
+    try:
+        rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order_id).order_by(OrderStatusHistory.changed_at).all()
+        res.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+    except Exception:
+        res.history = []
+    try:
+        rows = db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order_id).order_by(OrderStatusHistory.changed_at).all()
+        res.history = [OrderStatusHistoryResponse.from_orm(r) for r in rows]
+    except Exception:
+        res.history = []
     return res
 
 @app.put("/orders/{order_id}/status", response_model=OrderResponse)
 async def update_order_status(
     order_id: int, 
     status_update: OrderStatusUpdate, 
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = await get_current_user(authorization)
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order: raise HTTPException(404, "Order not found")
     
     new_status = status_update.status
+
+    # Permission checks
+    if user['role'] == 'customer':
+        if order.user_id != user['user_id']:
+            raise HTTPException(403, 'Permission denied')
+        if new_status != OrderStatus.CANCELLED:
+            raise HTTPException(403, 'Customers can only cancel their own orders')
+        if order.status not in [OrderStatus.WAITING_CONFIRMATION, OrderStatus.CONFIRMED]:
+            raise HTTPException(400, 'Cannot cancel at this stage')
+
+    if user['role'] == 'restaurant':
+        if order.restaurant_id != user['user_id']:
+            raise HTTPException(403, 'Permission denied')
+        allowed = [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_DELIVERY, OrderStatus.DELIVERED, OrderStatus.REJECTED]
+        if new_status not in allowed:
+            raise HTTPException(403, 'Action not allowed for restaurant')
+
+    # apply new status
     order.status = new_status
     order.updated_at = datetime.utcnow()
     
@@ -485,6 +614,48 @@ async def update_order_status(
             drone.current_lat = order.delivery_lat # Drone ở vị trí khách
             drone.current_lng = order.delivery_lng
             
+    # Write history entries for this status transition
+    try:
+        if new_status == OrderStatus.READY:
+            # record READY
+            h_ready = OrderStatusHistory(
+                order_id=order.id,
+                status=OrderStatus.READY.value,
+                changed_by=user['user_id'],
+                role=user['role'],
+                note='Marked ready',
+                changed_at=datetime.utcnow()
+            )
+            db.add(h_ready)
+            db.commit()
+
+            # if auto-assigned a drone and the status auto-switched to IN_DELIVERY, add IN_DELIVERY
+            if order.status == OrderStatus.IN_DELIVERY:
+                note = f'Drone assigned: #{order.drone_id}' if order.drone_id else 'Auto switched to in_delivery'
+                h_in = OrderStatusHistory(
+                    order_id=order.id,
+                    status=OrderStatus.IN_DELIVERY.value,
+                    changed_by=user['user_id'],
+                    role=user['role'],
+                    note=note,
+                    changed_at=datetime.utcnow()
+                )
+                db.add(h_in)
+                db.commit()
+        else:
+            h = OrderStatusHistory(
+                order_id=order.id,
+                status=order.status.value,
+                changed_by=user['user_id'],
+                role=user['role'],
+                note='Status updated',
+                changed_at=datetime.utcnow()
+            )
+            db.add(h)
+            db.commit()
+    except Exception as e:
+        print('Warning: could not append update history:', e)
+
     db.commit()
     db.refresh(order)
     
