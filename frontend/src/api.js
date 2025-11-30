@@ -3,22 +3,19 @@ import axios from 'axios';
 // ==========================================
 // CẤU HÌNH API - DÙNG API GATEWAY
 // ==========================================
-const API_GATEWAY = 'http://localhost:8000'; // ← API Gateway làm điểm vào duy nhất
+const API_GATEWAY = 'http://localhost:8000';
 
-// Định nghĩa các route path cho từng service
 const SERVICE_PATHS = {
-    USER: '/api/users',      // Route đến user_service
-    PRODUCT: '/api/products', // Route đến product_service  
-    ORDER: '/api/orders',     // Route đến order_service
-    PAYMENT: '/api/payments'  // Route đến payment_service
+    USER: '/api/users',
+    PRODUCT: '/api/products',
+    ORDER: '/api/orders',
+    PAYMENT: '/api/payments'
 };
 
-// Helper lấy URL ảnh từ Product Service
+// Helper lấy URL ảnh
 export const getImageUrl = (path) => {
     if (!path) return 'https://placehold.co/400x300?text=No+Image';
     if (path.startsWith('http')) return path;
-    
-    // Ảnh được serve từ Product Service qua Gateway
     return `${API_GATEWAY}/api/products${path}`;
 };
 
@@ -34,7 +31,7 @@ const createClient = (servicePath) => {
         }
     });
     
-    // Interceptor tự động thêm token vào mọi request
+    // Interceptor tự động thêm token
     client.interceptors.request.use((config) => {
         const token = localStorage.getItem('token');
         if (token) {
@@ -45,11 +42,10 @@ const createClient = (servicePath) => {
         return Promise.reject(error);
     });
     
-    // Interceptor xử lý lỗi response
+    // Interceptor xử lý lỗi
     client.interceptors.response.use(
         (response) => response,
         (error) => {
-            // Auto logout nếu token hết hạn
             if (error.response?.status === 401) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
@@ -69,22 +65,45 @@ export const orderApi = createClient(SERVICE_PATHS.ORDER);
 export const paymentApi = createClient(SERVICE_PATHS.PAYMENT);
 
 // ==========================================
-// SPECIAL ENDPOINTS (Không theo pattern /api/xxx)
+// [FIX CRITICAL] AUTH API - Special Endpoints
 // ==========================================
-
-// Các endpoint đặc biệt không qua service path
 export const authApi = {
-    login: (credentials) => 
-        axios.post(`${API_GATEWAY}/token`, credentials),
+    // [FIX] Login với form-urlencoded
+    login: async (username, password) => {
+        // CRITICAL: Backend expects OAuth2PasswordRequestForm
+        // Content-Type PHẢI là application/x-www-form-urlencoded
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+        
+        const response = await axios.post(
+            `${API_GATEWAY}/token`,  // Không có /api/users prefix
+            formData.toString(),      // Convert to string
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+        return response;
+    },
     
+    // Register với JSON
     register: (userData) => 
-        axios.post(`${API_GATEWAY}/register`, userData),
+        axios.post(`${API_GATEWAY}/register`, userData, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }),
     
+    // Verify token
     verifyToken: (token) =>
         axios.get(`${API_GATEWAY}/verify-token`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         })
 };
 
-// Export API Gateway URL cho các trường hợp đặc biệt
 export const API_BASE = API_GATEWAY;

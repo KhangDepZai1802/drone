@@ -1,30 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { Users, Store, Package, Plane, ShieldCheck } from 'lucide-react';
-import { userApi, orderApi } from '../api'; // Import API client
+import { userApi, orderApi } from '../api';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('users');
   const [loading, setLoading] = useState(true);
   
-  // State chứa dữ liệu thật từ API
   const [users, setUsers] = useState([]);
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
   const [drones, setDrones] = useState([]);
 
-  // Hàm gọi API lấy dữ liệu thật
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      // Gọi song song 4 API để tiết kiệm thời gian
-const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
-    userApi.get('/users'),           // Đúng: chỉ path cuối
-    userApi.get('/restaurants'),
-    orderApi.get('/orders'),
-    orderApi.get('/drones'),
-]);
-
+      
+      // [FIX] Gọi đúng endpoints
+      const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
+        userApi.get('/users'),           // GET /api/users/users
+        userApi.get('/restaurants'),     // GET /api/users/restaurants
+        orderApi.get('/orders'),         // GET /api/orders/orders
+        orderApi.get('/drones'),         // GET /api/orders/drones
+      ]);
 
       setUsers(usersRes.data);
       setRestaurants(restaurantsRes.data);
@@ -32,7 +30,7 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
       setDrones(dronesRes.data);
     } catch (error) {
       console.error("Lỗi tải dữ liệu Admin:", error);
-      toast.error('Không thể tải dữ liệu từ Server. Hãy kiểm tra Backend.');
+      toast.error('Không thể tải dữ liệu từ Server');
     } finally {
       setLoading(false);
     }
@@ -42,7 +40,6 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
     fetchAllData();
   }, []);
 
-  // Tính toán thống kê
   const stats = {
     totalUsers: users.length,
     totalRestaurants: restaurants.length,
@@ -51,13 +48,30 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
   };
 
   const getRoleBadge = (role) => {
-    const colors = { admin: 'bg-red-100 text-red-800', restaurant: 'bg-orange-100 text-orange-800', customer: 'bg-green-100 text-green-800' };
-    return <span className={`px-3 py-1 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-100'}`}>{role ? role.toUpperCase() : 'N/A'}</span>;
+    const colors = { 
+      admin: 'bg-red-100 text-red-800', 
+      restaurant: 'bg-orange-100 text-orange-800', 
+      customer: 'bg-green-100 text-green-800' 
+    };
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-100'}`}>
+        {role ? role.toUpperCase() : 'N/A'}
+      </span>
+    );
   };
 
   const getStatusBadge = (status) => {
-    const colors = { idle: 'bg-green-100 text-green-800', in_use: 'bg-blue-100 text-blue-800', charging: 'bg-yellow-100 text-yellow-800', maintenance: 'bg-red-100 text-red-800' };
-    return <span className={`px-2 py-1 rounded text-xs font-bold ${colors[status] || 'bg-gray-100'}`}>{status}</span>;
+    const colors = { 
+      idle: 'bg-green-100 text-green-800', 
+      in_use: 'bg-blue-100 text-blue-800', 
+      charging: 'bg-yellow-100 text-yellow-800', 
+      maintenance: 'bg-red-100 text-red-800' 
+    };
+    return (
+      <span className={`px-2 py-1 rounded text-xs font-bold ${colors[status] || 'bg-gray-100'}`}>
+        {status}
+      </span>
+    );
   };
 
   if (loading) {
@@ -79,7 +93,7 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
              <ShieldCheck size={40} /> Admin Dashboard
           </h1>
-          <p className="opacity-90">Hệ thống quản trị trung tâm DroneFood (Real-time Data)</p>
+          <p className="opacity-90">Hệ thống quản trị trung tâm DroneFood</p>
         </div>
       </div>
 
@@ -117,7 +131,7 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
         </div>
       </div>
 
-      {/* Main Content Tabs */}
+      {/* Tabs */}
       <div className="max-w-7xl mx-auto px-4 mt-10">
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="flex border-b overflow-x-auto">
@@ -125,7 +139,9 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                <button 
                  key={tab}
                  onClick={() => setActiveTab(tab)}
-                 className={`px-6 py-4 font-bold text-sm uppercase tracking-wide transition ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                 className={`px-6 py-4 font-bold text-sm uppercase tracking-wide transition ${
+                   activeTab === tab ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'
+                 }`}
                >
                  {tab === 'users' && 'Người dùng'}
                  {tab === 'restaurants' && 'Nhà hàng'}
@@ -155,7 +171,9 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                       <td className="py-3 font-medium">{u.full_name || u.username}</td>
                       <td className="py-3 text-gray-600">{u.email}</td>
                       <td className="py-3">{getRoleBadge(u.role)}</td>
-                      <td className="py-3 text-sm text-gray-500">{new Date(u.created_at).toLocaleDateString()}</td>
+                      <td className="py-3 text-sm text-gray-500">
+                        {new Date(u.created_at).toLocaleDateString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -170,9 +188,13 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                       <div>
                         <h3 className="font-bold text-lg">{r.restaurant_name}</h3>
                         <p className="text-gray-500 text-sm">📍 {r.city || 'N/A'}</p>
-                        <p className="text-gray-400 text-xs mt-1 line-clamp-1">{r.restaurant_description}</p>
+                        <p className="text-gray-400 text-xs mt-1 line-clamp-1">
+                          {r.restaurant_description}
+                        </p>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
                         {r.is_active ? 'Hoạt động' : 'Đóng cửa'}
                       </div>
                    </div>
@@ -186,7 +208,7 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                 <thead>
                   <tr className="text-gray-500 border-b">
                     <th className="py-3">Mã đơn</th>
-                    <th className="py-3">Khách hàng (ID)</th>
+                    <th className="py-3">Khách (ID)</th>
                     <th className="py-3">Tổng tiền</th>
                     <th className="py-3">Trạng thái</th>
                     <th className="py-3">Ngày đặt</th>
@@ -197,15 +219,21 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                     <tr key={o.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 font-bold">#{o.id}</td>
                       <td className="py-3">User #{o.user_id}</td>
-                      <td className="py-3 font-bold text-rose-600">{parseInt(o.total_amount).toLocaleString()}đ</td>
+                      <td className="py-3 font-bold text-rose-600">
+                        {parseInt(o.total_amount).toLocaleString()}đ
+                      </td>
                       <td className="py-3">
-                        <span className={`px-2 py-1 rounded text-xs uppercase font-bold 
-                          ${o.status === 'delivered' ? 'bg-green-100 text-green-700' : 
-                            o.status === 'in_delivery' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        <span className={`px-2 py-1 rounded text-xs uppercase font-bold ${
+                          o.status === 'delivered' ? 'bg-green-100 text-green-700' : 
+                          o.status === 'in_delivery' ? 'bg-blue-100 text-blue-700' : 
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
                           {o.status}
                         </span>
                       </td>
-                      <td className="py-3 text-sm text-gray-500">{new Date(o.created_at).toLocaleString()}</td>
+                      <td className="py-3 text-sm text-gray-500">
+                        {new Date(o.created_at).toLocaleString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -218,7 +246,9 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                 {drones.map(d => (
                   <div key={d.id} className="border rounded-xl p-5 hover:shadow-lg transition relative overflow-hidden">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="bg-indigo-50 p-3 rounded-lg"><Plane className="text-indigo-600" size={24} /></div>
+                      <div className="bg-indigo-50 p-3 rounded-lg">
+                        <Plane className="text-indigo-600" size={24} />
+                      </div>
                       {getStatusBadge(d.status)}
                     </div>
                     <h3 className="font-bold text-lg">{d.name}</h3>
@@ -231,7 +261,14 @@ const [usersRes, restaurantsRes, ordersRes, dronesRes] = await Promise.all([
                           <span className="font-bold">{d.battery_level}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className={`h-2 rounded-full ${d.battery_level > 50 ? 'bg-green-500' : d.battery_level > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${d.battery_level}%`}}></div>
+                          <div 
+                            className={`h-2 rounded-full ${
+                              d.battery_level > 50 ? 'bg-green-500' : 
+                              d.battery_level > 20 ? 'bg-yellow-500' : 
+                              'bg-red-500'
+                            }`} 
+                            style={{width: `${d.battery_level}%`}}
+                          ></div>
                         </div>
                       </div>
                       <div className="flex justify-between text-sm pt-2 border-t">

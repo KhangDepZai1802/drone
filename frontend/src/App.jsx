@@ -140,7 +140,8 @@ const LoginPage = ({ onLogin }) => {
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
-      const res = await userApi.post('/token', formData);
+
+      const res = await authApi.login(username, password);
       
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
