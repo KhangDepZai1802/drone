@@ -1,23 +1,34 @@
-/* SCRIPT KHỞI TẠO DATABASES VÀ DỮ LIỆU MẪU (REALISTIC DATA)
-   HỆ THỐNG: DRONE DELIVERY MICROSERVICES
-   Pass mặc định cho tất cả user: 123456
-   Hash: $2b$12$49h7Uk7BWuTkmo/l7PWj0uJrLFVg86SoeT.X.QGEB8hj5GsS2/aVq
-*/
+/* ============================================
+   FOODFAST DRONE DELIVERY - DATABASE INIT
+   Realistic Data for Demo
+   Password: 123456 (hashed)
+   ============================================ */
 
 USE master;
 GO
 
--- ====================================================
--- 1. USER SERVICE (Database: UserDB)
--- ====================================================
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'UserDB') BEGIN CREATE DATABASE UserDB; END
-GO
-USE UserDB;
+-- Create Databases
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'UserServiceDB')
+    CREATE DATABASE UserServiceDB;
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'ProductServiceDB')
+    CREATE DATABASE ProductServiceDB;
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'OrderServiceDB')
+    CREATE DATABASE OrderServiceDB;
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'PaymentServiceDB')
+    CREATE DATABASE PaymentServiceDB;
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'DroneServiceDB')
+    CREATE DATABASE DroneServiceDB;
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'CartServiceDB')
+    CREATE DATABASE CartServiceDB;
 GO
 
--- Reset Tables
+-- ==========================================
+-- USER SERVICE DB
+-- ==========================================
+USE UserServiceDB;
+GO
+
 IF OBJECT_ID('users', 'U') IS NOT NULL DROP TABLE users;
-
 CREATE TABLE users (
     id INT IDENTITY(1,1) PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
@@ -27,118 +38,109 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address NVARCHAR(500),
     role VARCHAR(20) DEFAULT 'customer',
-    is_active INT DEFAULT 1,
+    is_active BIT DEFAULT 1,
     created_at DATETIME DEFAULT GETDATE(),
-    -- Fields riêng cho Restaurant
     restaurant_name NVARCHAR(255),
     restaurant_description NVARCHAR(MAX),
     restaurant_image VARCHAR(500),
+    restaurant_lat FLOAT,
+    restaurant_lng FLOAT,
     city NVARCHAR(100),
     status VARCHAR(20) DEFAULT 'active'
 );
 
--- SEED DATA: USERS & RESTAURANTS
-INSERT INTO users (username, email, hashed_password, full_name, phone, address, role, restaurant_name, restaurant_description, restaurant_image, city) VALUES 
--- 1. Admin
-('admin', 'admin@dronefood.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'System Administrator', '0909000000', 'HQ DroneFood', 'admin', NULL, NULL, NULL, NULL),
+-- Admin (Password: 123456)
+INSERT INTO users VALUES 
+('admin', 'admin@foodfast.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 
+ N'Administrator', '0909000000', N'Foodfast HQ', 'admin', 1, GETDATE(), 
+ NULL, NULL, NULL, NULL, NULL, NULL, 'active');
 
--- 2. Restaurant: KFC
-('kfc_vietnam', 'contact@kfc.com.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'KFC Manager', '19006886', N'Lê Lai, Quận 1', 'restaurant', 
- N'KFC Vietnam', N'Gà rán Kentucky trứ danh thế giới. Vị ngon trên từng ngón tay.', 
- 'https://static.kfcvietnam.com.vn/images/content/home/carousel/3.jpg', N'Hồ Chí Minh'),
+-- Restaurants (Saigon locations)
+INSERT INTO users VALUES 
+('kfc_benthanhmarket', 'kfc@foodfast.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W',
+ N'KFC Manager', '19006886', N'Chợ Bến Thành, Quận 1', 'restaurant', 1, GETDATE(),
+ N'KFC Bến Thành', N'Gà rán Kentucky chuẩn vị Mỹ', 'https://static.kfcvietnam.com.vn/images/content/home/carousel/3.jpg',
+ 10.772928, 106.698242, N'Hồ Chí Minh', 'active');
 
--- 3. Restaurant: Phúc Long
-('phuclong', 'info@phuclong.com.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Phuc Long Manager', '02862630377', N'42 Ngô Đức Kế, Quận 1', 'restaurant', 
- N'Phúc Long Tea & Coffee', N'Thương hiệu trà và cà phê thượng hạng từ năm 1968.', 
- 'https://phuclong.com.vn/uploads/store/0530467772637255d642b58872658a2d.jpg', N'Hồ Chí Minh'),
+INSERT INTO users VALUES 
+('phuclong_nguyenhue', 'phuclong@foodfast.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W',
+ N'Phúc Long Manager', '02862630377', N'Đường Nguyễn Huệ, Quận 1', 'restaurant', 1, GETDATE(),
+ N'Phúc Long Nguyễn Huệ', N'Trà sữa và cà phê thượng hạng', 'https://phuclong.com.vn/uploads/store/0530467772637255d642b58872658a2d.jpg',
+ 10.774670, 106.701100, N'Hồ Chí Minh', 'active');
 
--- 4. Restaurant: Pizza 4P's
-('pizza4ps', 'booking@pizza4ps.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', '4Ps Manager', '19006043', N'8 Thủ Khoa Huân, Quận 1', 'restaurant', 
- N'Pizza 4P''s', N'Pizza kiểu Nhật với phô mai tự làm. Mang lại sự an nhiên cho tâm hồn.', 
- 'https://pizza4ps.com/wp-content/uploads/2021/08/Pizza-4Ps-Ben-Thanh-1.jpg', N'Hồ Chí Minh'),
+INSERT INTO users VALUES 
+('pizza4ps_lethitho', 'pizza4ps@foodfast.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W',
+ N'Pizza 4Ps Manager', '19006043', N'Lê Thánh Tôn, Quận 1', 'restaurant', 1, GETDATE(),
+ N'Pizza 4P''s Signature', N'Pizza phô mai tươi kiểu Nhật', 'https://pizza4ps.com/wp-content/uploads/2021/08/Pizza-4Ps-Ben-Thanh-1.jpg',
+ 10.775245, 106.699563, N'Hồ Chí Minh', 'active');
 
--- 5. Restaurant: Cơm Tấm Cali
-('comtamcali', 'lienhe@comtamcali.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Cali Manager', '02839252222', N'236 Lê Thánh Tôn, Quận 1', 'restaurant', 
- N'Cơm Tấm Cali', N'Hệ thống cơm tấm văn phòng sạch sẽ, ngon miệng, chuẩn vị Sài Gòn.', 
- 'https://comtamcali.com/wp-content/uploads/2020/07/slide-1.jpg', N'Hồ Chí Minh'),
+-- Customers
+INSERT INTO users VALUES 
+('khang_customer', 'khang@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W',
+ N'Lê Duy Khang', '0987654321', N'Đại học Sài Gòn, Quận 5', 'customer', 1, GETDATE(),
+ NULL, NULL, NULL, NULL, NULL, N'Hồ Chí Minh', NULL);
 
--- 6. Restaurant: Phở Hùng
-('phohung', 'info@phohung.vn', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', 'Pho Hung Owner', '02439363636', N'24 Láng Hạ, Đống Đa', 'restaurant', 
- N'Phở Hùng', N'Hương vị phở truyền thống Hà Nội, nước dùng đậm đà.', 
- 'https://cdn.tgdd.vn/Files/2022/01/25/1412806/pho-hung-huong-vi-pho-truyen-thong-giua-long-sai-gon-202201250953187289.jpg', N'Hà Nội'),
-
--- 7. Customers
-('khangdepzai', 'khang@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Lê Khang', '0987654321', N'Landmark 81, Bình Thạnh', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh'),
-('thanhhang', 'hang@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Phạm Thanh Hằng', '0912345678', N'Times City, Hai Bà Trưng', 'customer', NULL, NULL, NULL, N'Hà Nội'),
-('elonmusk', 'elon@tesla.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W', N'Elon Musk', '0999999999', N'Bitexco Financial Tower', 'customer', NULL, NULL, NULL, N'Hồ Chí Minh');
+INSERT INTO users VALUES 
+('doanh_customer', 'doanh@gmail.com', '$2b$12$PxVVMg.DNaTcjj4XMk4Dd.Av5AMIAYs5R17mkOYNou/AuMLY2c87W',
+ N'Quách Khả Doanh', '0912345678', N'Landmark 81, Bình Thạnh', 'customer', 1, GETDATE(),
+ NULL, NULL, NULL, NULL, NULL, N'Hồ Chí Minh', NULL);
 GO
 
--- ====================================================
--- 2. PRODUCT SERVICE (Database: ProductDB)
--- ====================================================
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'ProductDB') BEGIN CREATE DATABASE ProductDB; END
-GO
-USE ProductDB;
+-- ==========================================
+-- PRODUCT SERVICE DB
+-- ==========================================
+USE ProductServiceDB;
 GO
 
 IF OBJECT_ID('products', 'U') IS NOT NULL DROP TABLE products;
 CREATE TABLE products (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    restaurant_id INT NOT NULL, 
+    restaurant_id INT NOT NULL,
     name NVARCHAR(255) NOT NULL,
     description NVARCHAR(MAX),
     price FLOAT NOT NULL,
-    original_price FLOAT,
     image_url VARCHAR(500),
     category NVARCHAR(100),
-    is_available INT DEFAULT 1,
+    is_available BIT DEFAULT 1,
     stock_quantity INT DEFAULT 100,
     weight FLOAT DEFAULT 0.5,
     preparation_time INT DEFAULT 15,
-    options NVARCHAR(MAX), -- [FIX] Added for JSON options
     created_at DATETIME DEFAULT GETDATE()
 );
 
--- SEED DATA: PRODUCTS
-INSERT INTO products (restaurant_id, name, description, price, original_price, image_url, category, weight) VALUES 
--- KFC (ID: 2)
-(2, N'Combo Gà Rán Cơ Bản', N'2 Miếng Gà Giòn Cay + 1 Khoai Tây Chiên (Vừa) + 1 Pepsi', 89000, 105000, 'https://static.kfcvietnam.com.vn/images/items/lg/Combo-Ga-Ran-A.jpg', N'Combo', 0.8),
-(2, N'Gà Popcorn (Vừa)', N'Gà viên chiên giòn rụm, lắc phô mai.', 45000, 45000, 'https://static.kfcvietnam.com.vn/images/items/lg/Popcorn-Vua.jpg', N'Gà Rán', 0.3),
-(2, N'Burger Zinger', N'Bánh mì kẹp phi lê gà giòn cay độc quyền.', 59000, 59000, 'https://static.kfcvietnam.com.vn/images/items/lg/Burger-Zinger.jpg', N'Burger', 0.4),
-(2, N'Cơm Gà Giòn Cay', N'Cơm trắng ăn kèm đùi gà giòn cay và xốt.', 49000, 49000, 'https://static.kfcvietnam.com.vn/images/items/lg/Com-Ga-Gion-Cay.jpg', N'Cơm', 0.5),
+-- KFC Products (restaurant_id: 2)
+INSERT INTO products VALUES 
+(2, N'Combo Gà Rán 2 Miếng', N'2 miếng gà giòn cay + 1 khoai tây chiên vừa + Pepsi', 89000, 
+ 'https://static.kfcvietnam.com.vn/images/items/lg/Combo-Ga-Ran-A.jpg', N'Combo', 1, 50, 0.8, 15, GETDATE()),
+(2, N'Gà Popcorn Vừa', N'Gà viên chiên giòn rụm lắc phô mai', 45000, 
+ 'https://static.kfcvietnam.com.vn/images/items/lg/Popcorn-Vua.jpg', N'Gà Rán', 1, 100, 0.3, 10, GETDATE()),
+(2, N'Burger Zinger', N'Bánh mì kẹp phi lê gà giòn cay', 59000, 
+ 'https://static.kfcvietnam.com.vn/images/items/lg/Burger-Zinger.jpg', N'Burger', 1, 30, 0.4, 12, GETDATE());
 
--- Phúc Long (ID: 3)
-(3, N'Trà Sữa Phúc Long', N'Vị trà đậm đà đặc trưng, kết hợp sữa béo ngậy.', 55000, 55000, 'https://phuclong.com.vn/uploads/dish/062d989359a686-trasuaphuclong.png', N'Trà Sữa', 0.5),
-(3, N'Trà Đào Cam Sả', N'Best seller. Trà đen ủ lạnh với đào miếng giòn ngọt.', 60000, 60000, 'https://phuclong.com.vn/uploads/dish/64a6c406981881-tradaocamsa.png', N'Trà Trái Cây', 0.5),
-(3, N'Cà Phê Sữa Đá', N'Cà phê phin truyền thống Việt Nam.', 45000, 45000, 'https://phuclong.com.vn/uploads/dish/d56545129995fd-caphesuada.png', N'Cà Phê', 0.4),
+-- Phúc Long Products (restaurant_id: 3)
+INSERT INTO products VALUES 
+(3, N'Trà Sữa Phúc Long', N'Trà đen đậm đà pha sữa béo ngậy', 55000, 
+ 'https://phuclong.com.vn/uploads/dish/062d989359a686-trasuaphuclong.png', N'Trà Sữa', 1, 200, 0.5, 5, GETDATE()),
+(3, N'Trà Đào Cam Sả', N'Trà đen ủ lạnh với đào tươi', 60000, 
+ 'https://phuclong.com.vn/uploads/dish/64a6c406981881-tradaocamsa.png', N'Trà Trái Cây', 1, 150, 0.5, 8, GETDATE()),
+(3, N'Cà Phê Sữa Đá', N'Cà phê phin truyền thống', 45000, 
+ 'https://phuclong.com.vn/uploads/dish/d56545129995fd-caphesuada.png', N'Cà Phê', 1, 300, 0.4, 5, GETDATE());
 
--- Pizza 4P's (ID: 4)
-(4, N'Pizza 4 Cheese Honey', N'Pizza 4 loại phô mai kèm mật ong rừng. Món đặc trưng nhất.', 280000, 280000, 'https://delivery.pizza4ps.com/wp-content/uploads/2021/08/4-Cheese-Honey.jpg', N'Pizza', 0.6),
-(4, N'Mỳ Cua Sốt Kem', N'Mỳ Ý sốt kem cà chua với thịt cua bể tươi.', 195000, 195000, 'https://delivery.pizza4ps.com/wp-content/uploads/2021/08/Crab-Tomato-Cream.jpg', N'Pasta', 0.5),
-(4, N'Salad Burrata kèm Trái Cây', N'Phô mai Burrata tươi làm thủ công kèm trái cây nhiệt đới.', 165000, 165000, 'https://delivery.pizza4ps.com/wp-content/uploads/2021/08/Burrata-Fruit-Salad.jpg', N'Salad', 0.4),
-
--- Cơm Tấm Cali (ID: 5)
-(5, N'Cơm Sườn Bì Chả', N'Dĩa cơm đầy đủ sườn nướng mật ong, bì thính, chả trứng.', 75000, 85000, 'https://comtamcali.com/wp-content/uploads/2016/06/suon-bi-cha.jpg', N'Cơm Tấm', 0.6),
-(5, N'Cơm Ba Rọi Nướng', N'Ba rọi heo nướng muối ớt đậm đà.', 68000, 68000, 'https://comtamcali.com/wp-content/uploads/2016/06/ba-roi-nuong.jpg', N'Cơm Tấm', 0.6),
-(5, N'Canh Khổ Qua Nhồi Thịt', N'Canh khổ qua thanh mát, giải nhiệt.', 25000, 25000, 'https://comtamcali.com/wp-content/uploads/2016/06/canh-kho-qua.jpg', N'Canh', 0.3),
-
--- Phở Hùng (ID: 6)
-(6, N'Phở Đặc Biệt', N'Tô lớn: Tái, Nạm, Gầu, Gân, Bò Viên.', 95000, 95000, 'https://phohung.com.vn/wp-content/uploads/2020/08/pho-dac-biet.jpg', N'Phở', 0.8),
-(6, N'Phở Tái Lăn', N'Thịt bò xào lăn thơm phức tỏi.', 85000, 85000, 'https://phohung.com.vn/wp-content/uploads/2020/08/pho-tai-lan.jpg', N'Phở', 0.8);
+-- Pizza 4Ps Products (restaurant_id: 4)
+INSERT INTO products VALUES 
+(4, N'Pizza 4 Cheese Honey', N'Pizza 4 loại phô mai + mật ong rừng', 280000, 
+ 'https://delivery.pizza4ps.com/wp-content/uploads/2021/08/4-Cheese-Honey.jpg', N'Pizza', 1, 20, 0.9, 25, GETDATE()),
+(4, N'Mỳ Cua Sốt Kem', N'Mỳ Ý sốt kem cà chua với thịt cua', 195000, 
+ 'https://delivery.pizza4ps.com/wp-content/uploads/2021/08/Crab-Tomato-Cream.jpg', N'Pasta', 1, 30, 0.6, 20, GETDATE());
 GO
 
--- ====================================================
--- 3. ORDER SERVICE (Database: OrderDB)
--- ====================================================
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'OrderDB') BEGIN CREATE DATABASE OrderDB; END
-GO
-USE OrderDB;
+-- ==========================================
+-- DRONE SERVICE DB ⭐
+-- ==========================================
+USE DroneServiceDB;
 GO
 
-IF OBJECT_ID('order_items', 'U') IS NOT NULL DROP TABLE order_items;
-IF OBJECT_ID('orders', 'U') IS NOT NULL DROP TABLE orders;
 IF OBJECT_ID('drones', 'U') IS NOT NULL DROP TABLE drones;
-
 CREATE TABLE drones (
     id INT IDENTITY(1,1) PRIMARY KEY,
     name NVARCHAR(100) NOT NULL,
@@ -146,18 +148,55 @@ CREATE TABLE drones (
     status VARCHAR(20) DEFAULT 'idle',
     battery_level FLOAT DEFAULT 100.0,
     max_payload FLOAT DEFAULT 5.0,
-    max_distance_km FLOAT DEFAULT 15.0, -- [FIX] Added
-    current_lat FLOAT,
-    current_lng FLOAT,
+    max_distance_km FLOAT DEFAULT 30.0,
+    current_lat FLOAT DEFAULT 10.762622,
+    current_lng FLOAT DEFAULT 106.660172,
+    base_lat FLOAT DEFAULT 10.762622,
+    base_lng FLOAT DEFAULT 106.660172,
     created_at DATETIME DEFAULT GETDATE()
 );
+
+-- Sample Drones
+INSERT INTO drones VALUES 
+(N'FoodFast Drone Alpha', 'DJI Matrice 300', 'idle', 100.0, 5.0, 30.0, 
+ 10.762622, 106.660172, 10.762622, 106.660172, GETDATE()),
+(N'FoodFast Drone Beta', 'DJI Mavic 3 Pro', 'idle', 95.0, 3.0, 25.0, 
+ 10.762622, 106.660172, 10.762622, 106.660172, GETDATE()),
+(N'FoodFast Drone Gamma', 'Custom FPV', 'charging', 15.0, 2.0, 20.0, 
+ 10.762622, 106.660172, 10.762622, 106.660172, GETDATE());
+
+-- Drone Tracking History
+IF OBJECT_ID('drone_tracking', 'U') IS NOT NULL DROP TABLE drone_tracking;
+CREATE TABLE drone_tracking (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    drone_id INT NOT NULL,
+    order_id INT,
+    latitude FLOAT NOT NULL,
+    longitude FLOAT NOT NULL,
+    altitude FLOAT DEFAULT 0,
+    speed FLOAT DEFAULT 0,
+    battery_level FLOAT,
+    status VARCHAR(50),
+    timestamp DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- ==========================================
+-- ORDER SERVICE DB
+-- ==========================================
+USE OrderServiceDB;
+GO
+
+IF OBJECT_ID('order_items', 'U') IS NOT NULL DROP TABLE order_items;
+IF OBJECT_ID('order_status_history', 'U') IS NOT NULL DROP TABLE order_status_history;
+IF OBJECT_ID('orders', 'U') IS NOT NULL DROP TABLE orders;
 
 CREATE TABLE orders (
     id INT IDENTITY(1,1) PRIMARY KEY,
     user_id INT NOT NULL,
     restaurant_id INT NOT NULL,
     total_amount FLOAT NOT NULL,
-    total_weight FLOAT DEFAULT 0, -- [FIX] Added
+    total_weight FLOAT DEFAULT 0,
     status VARCHAR(50) DEFAULT 'waiting_confirmation',
     delivery_address NVARCHAR(500) NOT NULL,
     delivery_lat FLOAT,
@@ -167,8 +206,8 @@ CREATE TABLE orders (
     distance_km FLOAT,
     drone_id INT,
     estimated_delivery_time INT DEFAULT 30,
-    rejection_reason NVARCHAR(MAX), -- [FIX] Added
-    notes NVARCHAR(MAX), -- [FIX] Added
+    rejection_reason NVARCHAR(MAX),
+    notes NVARCHAR(MAX),
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE()
 );
@@ -180,40 +219,25 @@ CREATE TABLE order_items (
     product_name NVARCHAR(255) NOT NULL,
     quantity INT NOT NULL,
     price FLOAT NOT NULL,
-    weight FLOAT DEFAULT 0.5, -- [FIX] Added
+    weight FLOAT DEFAULT 0.5,
     FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
--- SEED DATA: DRONES
-INSERT INTO drones (name, model, status, battery_level, current_lat, current_lng, max_payload, max_distance_km) VALUES 
-(N'Falcon Heavy', 'DJI Matrice 600', 'idle', 100.0, 10.771595, 106.704758, 6.0, 20.0),
-(N'Nimbus 2000', 'DJI Mavic 3', 'idle', 78.5, 10.775845, 106.701758, 2.5, 15.0),
-(N'Firebolt', 'Custom FPV', 'charging', 12.0, 10.771595, 106.704758, 1.5, 10.0),
-(N'Sky Walker', 'Amazon Prime Air Clone', 'maintenance', 0.0, 10.771595, 106.704758, 4.0, 25.0),
-(N'Hawk Eye 1', 'DJI Phantom 4', 'idle', 92.0, 10.791595, 106.694758, 3.0, 18.0);
-
--- SEED DATA: ORDERS
-INSERT INTO orders (user_id, restaurant_id, total_amount, total_weight, status, delivery_address, drone_id, created_at) VALUES 
-(7, 2, 134000, 1.1, 'delivered', N'Landmark 81, Vinhomes Central Park', 1, DATEADD(hour, -2, GETDATE()));
-
-INSERT INTO order_items (order_id, product_id, product_name, quantity, price, weight) VALUES 
-(1, 1, N'Combo Gà Rán Cơ Bản', 1, 89000, 0.8),
-(1, 2, N'Gà Popcorn (Vừa)', 1, 45000, 0.3);
-
-INSERT INTO orders (user_id, restaurant_id, total_amount, total_weight, status, delivery_address, drone_id, created_at) VALUES 
-(8, 3, 115000, 1.0, 'in_delivery', N'Bitexco Tower, Quận 1', 2, DATEADD(minute, -15, GETDATE()));
-
-INSERT INTO order_items (order_id, product_id, product_name, quantity, price, weight) VALUES 
-(2, 5, N'Trà Sữa Phúc Long', 1, 55000, 0.5),
-(2, 6, N'Trà Đào Cam Sả', 1, 60000, 0.5);
+CREATE TABLE order_status_history (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    order_id INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    changed_by INT,
+    role VARCHAR(50),
+    note NVARCHAR(MAX),
+    changed_at DATETIME DEFAULT GETDATE()
+);
 GO
 
--- ====================================================
--- 4. PAYMENT SERVICE (Database: PaymentDB)
--- ====================================================
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'PaymentDB') BEGIN CREATE DATABASE PaymentDB; END
-GO
-USE PaymentDB;
+-- ==========================================
+-- PAYMENT SERVICE DB
+-- ==========================================
+USE PaymentServiceDB;
 GO
 
 IF OBJECT_ID('payments', 'U') IS NOT NULL DROP TABLE payments;
@@ -228,9 +252,30 @@ CREATE TABLE payments (
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE()
 );
+GO
 
--- SEED DATA: PAYMENTS
-INSERT INTO payments (order_id, user_id, amount, payment_method, status, transaction_id, created_at) VALUES 
-(1, 7, 134000, 'momo', 'completed', 'MOMO123456789', DATEADD(hour, -2, GETDATE())),
-(2, 8, 115000, 'credit_card', 'completed', 'VISA987654321', DATEADD(minute, -15, GETDATE()));
+-- ==========================================
+-- CART SERVICE DB
+-- ==========================================
+USE CartServiceDB;
+GO
+
+IF OBJECT_ID('cart_items', 'U') IS NOT NULL DROP TABLE cart_items;
+CREATE TABLE cart_items (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    user_id INT NOT NULL,
+    product_id INT NOT NULL,
+    restaurant_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    added_at DATETIME DEFAULT GETDATE(),
+    CONSTRAINT UK_Cart UNIQUE (user_id, product_id)
+);
+GO
+
+PRINT '✅ All databases initialized successfully!'
+PRINT '📊 Default accounts:'
+PRINT '   Admin: admin / 123456'
+PRINT '   Customer: khang_customer / 123456'
+PRINT '   Restaurant: kfc_benthanhmarket / 123456'
+PRINT '🚁 3 Drones ready for deployment!'
 GO
